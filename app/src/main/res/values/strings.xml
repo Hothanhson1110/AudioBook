@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">AudioBook</string>
+    <string name="home_title">Thư viện sách</string>
+    <string name="pick_file">Chọn file PDF / Word</string>
+    <string name="listen">Nghe</string>
+    <string name="play">Phát</string>
+    <string name="pause">Tạm dừng</string>
+</resources>

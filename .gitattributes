@@ -1,0 +1,44 @@
+# =============================================================================
+# Auto detect text files and perform LF normalization
+# =============================================================================
+* text=auto eol=lf
+
+# =============================================================================
+# Kotlin / Java / Gradle
+# =============================================================================
+*.kt     text eol=lf
+*.kts    text eol=lf
+*.java   text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+
+# =============================================================================
+# Binary files — không convert
+# =============================================================================
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+
+*.jar  binary
+*.apk  binary
+*.aab  binary
+*.so   binary
+
+*.jks  binary
+*.keystore binary
+
+# =============================================================================
+# Gradle wrapper — KHÔNG để git convert
+# =============================================================================
+gradlew        text eol=lf
+gradlew.bat    text eol=crlf
+gradle-wrapper.jar binary
+
+# =============================================================================
+# Git diff / merge
+# =============================================================================
+*.kt   diff=kotlin
+*.md   diff=markdown
