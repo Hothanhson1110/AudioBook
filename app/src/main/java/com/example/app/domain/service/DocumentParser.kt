@@ -1,4 +1,3 @@
-cat > app/src/main/java/com/example/app/domain/service/DocumentParser.kt << 'EOF'
 package com.example.app.domain.service
 
 import kotlinx.coroutines.flow.Flow
@@ -12,8 +11,3 @@ interface DocumentParser {
     val supportedExtensions: Set<String>
     fun parse(uriString: String): Flow<String>
 }
-EOF
-
-# Verify
-ls -la app/src/main/java/com/example/app/domain/service/
-cat app/src/main/java/com/example/app/domain/service/DocumentParser.kt
