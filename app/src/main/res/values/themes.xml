@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Theme gốc cho Activity. Chỉ dùng để Android khởi động Activity
+        trước khi Compose tiếp quản. Không cần custom nhiều.
+    -->
+    <style name="Theme.AudioBook" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Cho phép vẽ edge-to-edge (status bar trong suốt) -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
