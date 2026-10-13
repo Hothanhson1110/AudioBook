@@ -6,4 +6,5 @@ sealed interface Route {
     @Serializable data object Home : Route
     @Serializable data class Player(val bookId: Long) : Route
     @Serializable data object Library : Route
+    @Serializable data object Settings : Route
 }
