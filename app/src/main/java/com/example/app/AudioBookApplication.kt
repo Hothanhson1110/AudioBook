@@ -3,6 +3,7 @@ package com.example.app
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.example.app.core.CrashLogger
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -14,6 +15,7 @@ class AudioBookApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLogger.install(this)   // ← THÊM DÒNG NÀY
         PDFBoxResourceLoader.init(this)
     }
 
