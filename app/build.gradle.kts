@@ -96,6 +96,8 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+
+    implementation(libs.androidx.datastore.preferences)
     
 
     testImplementation(libs.junit.jupiter.api)
