@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -66,7 +67,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.app.domain.model.AudioBook
 import com.example.app.domain.model.BookStatus
-import com.example.app.domain.service.VoicePresets
 import com.example.app.presentation.theme.NeonCyan
 import com.example.app.presentation.theme.NeonGreen
 import com.example.app.presentation.theme.NeonMagenta
@@ -86,6 +86,7 @@ private val SUPPORTED_MIME_TYPES = arrayOf(
 fun HomeScreen(
     onOpenPlayer: (Long) -> Unit,
     onOpenLibrary: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -155,16 +156,31 @@ fun HomeScreen(
                             )
                         }
                     }
+
                     IconButton(
                         onClick = { filePicker.launch(SUPPORTED_MIME_TYPES) },
                         modifier = Modifier
-                            .padding(end = 8.dp)
+                            .padding(end = 4.dp)
                             .clip(CircleShape)
                             .background(NeonCyan),
                     ) {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = "Add book",
+                            tint = Color.Black,
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .clip(CircleShape)
+                            .background(NeonMagenta),
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
                             tint = Color.Black,
                         )
                     }
@@ -224,10 +240,7 @@ fun HomeScreen(
                                         progress = synthesis[book.id],
                                         onPlay = { onOpenPlayer(book.id) },
                                         onSynthesize = {
-                                            viewModel.onSynthesize(
-                                                book.id,
-                                                VoicePresets.findById(book.voiceProfileId),
-                                            )
+                                            viewModel.onResynthesize(book.id)
                                         },
                                         onCancel = { viewModel.onCancelSynthesis(book.id) },
                                         onDelete = { viewModel.onDelete(book.id) },
