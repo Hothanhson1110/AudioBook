@@ -6,9 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.domain.model.BookStatus
 import com.example.app.domain.repository.SynthesisState
 import com.example.app.domain.service.ImportProgress
+import com.example.app.domain.service.VoiceComposer
 import com.example.app.domain.service.VoiceProfile
-import com.example.app.domain.service.VoicePresets
 import com.example.app.domain.usecase.DeleteBookUseCase
+import com.example.app.domain.usecase.GetVoiceSettingsUseCase
 import com.example.app.domain.usecase.ImportDocumentUseCase
 import com.example.app.domain.usecase.ObserveBooksUseCase
 import com.example.app.domain.usecase.SynthesizeBookUseCase
@@ -18,6 +19,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -30,6 +32,7 @@ class HomeViewModel @Inject constructor(
     private val importDocument: ImportDocumentUseCase,
     private val synthesizeBook: SynthesizeBookUseCase,
     private val deleteBook: DeleteBookUseCase,
+    private val getVoiceSettings: GetVoiceSettingsUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -71,7 +74,10 @@ class HomeViewModel @Inject constructor(
                 when (progress) {
                     is ImportProgress.Completed -> {
                         _events.send(HomeEvent.Imported(progress.bookId))
-                        onSynthesize(progress.bookId, VoicePresets.VIETNAMESE.first())
+                        // Dung cai dat giong doc hien tai
+                        val settings = getVoiceSettings().first()
+                        val profile = VoiceComposer.compose(settings)
+                        onSynthesize(progress.bookId, profile)
                     }
                     is ImportProgress.Failed ->
                         _events.send(HomeEvent.Message(progress.message))
@@ -94,7 +100,7 @@ class HomeViewModel @Inject constructor(
                         is SynthesisState.Running -> {
                             val percent = state.progressPercent
                             val total = state.totalChunks
-                            val done = (percent * total) / 100
+                            val done = if (total > 0) (percent * total) / 100 else 0
                             _synthesis.value = _synthesis.value + (
                                 bookId to SynthesisProgress(
                                     doneChunks = done,
@@ -144,7 +150,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             current.filter { it.status == BookStatus.FAILED }
                 .forEach { deleteBook(it.id) }
-            _events.send(HomeEvent.Message("Đã xoá các sách lỗi"))
+            _events.send(HomeEvent.Message("Da xoa cac sach loi"))
         }
     }
 }
