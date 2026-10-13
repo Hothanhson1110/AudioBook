@@ -1,7 +1,6 @@
 package com.example.app.data.worker
 
 import android.content.Context
-import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -15,6 +14,7 @@ import com.example.app.domain.service.VoiceProfile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,13 +32,17 @@ class SynthesisOrchestrator @Inject constructor(
         sourceUri: String,
         profile: VoiceProfile,
     ) = withContext(Dispatchers.IO) {
+        // Nếu book đã đang PROCESSING → bỏ qua, không tạo work trùng
+        val existing = dao.getById(bookId)
+        if (existing?.status == BookStatus.PROCESSING.name) {
+            WorkerLogger.log(context, "Orchestrator", "skip: book $bookId đang PROCESSING")
+            return@withContext
+        }
+
         WorkerLogger.log(context, "Orchestrator", "=== START book $bookId ===")
 
-        // Cancel workers cũ trước khi enqueue mới
-        workManager.cancelAllWorkByTag(tag(bookId))
-
-        // Xoá chunk cũ nếu còn sót
-        java.io.File(context.filesDir, "audio/book_$bookId").deleteRecursively()
+        // Chỉ xoá file output cũ (.m4a), KHÔNG xoá chunkDir
+        File(context.filesDir, "audio/book_$bookId.m4a").delete()
 
         dao.updateAudio(bookId, null, BookStatus.PROCESSING.name, 0L)
 
@@ -77,12 +81,9 @@ class SynthesisOrchestrator @Inject constructor(
                 .addTag(tag(bookId))
                 .build()
 
+            // KEEP: nếu đã có unique work cùng tên → bỏ qua, không chạy song song
             workManager
-                .beginUniqueWork(
-                    tag(bookId),
-                    ExistingWorkPolicy.REPLACE,   // ← REPLACE nếu đã có
-                    chunkRequests,
-                )
+                .beginUniqueWork(tag(bookId), ExistingWorkPolicy.KEEP, chunkRequests)
                 .then(mergeRequest)
                 .enqueue()
 
@@ -95,8 +96,11 @@ class SynthesisOrchestrator @Inject constructor(
     }
 
     fun cancel(bookId: Long) {
+        WorkerLogger.log(context, "Orchestrator", "cancel book $bookId")
         workManager.cancelAllWorkByTag(tag(bookId))
+        // Xoá chunks khi user chủ động cancel
+        File(context.filesDir, "audio/book_$bookId").deleteRecursively()
     }
 
     private fun tag(bookId: Long) = "synth_book_$bookId"
-}
+}a
