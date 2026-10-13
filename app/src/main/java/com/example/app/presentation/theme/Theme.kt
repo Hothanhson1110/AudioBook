@@ -3,32 +3,45 @@ package com.example.app.presentation.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
-private val LightColors = lightColorScheme(
-    primary = Primary,
-    onPrimary = OnPrimary,
-    secondary = Secondary,
-    onSecondary = OnSecondary,
-    background = Background,
-    onBackground = OnBackground,
-    surface = Surface,
-    onSurface = OnSurface,
-)
+private val NeonColorScheme = darkColorScheme(
+    primary = NeonCyan,
+    onPrimary = Color.Black,
+    primaryContainer = DarkSurfaceVariant,
+    onPrimaryContainer = NeonCyan,
 
-private val DarkColors = darkColorScheme(
-    primary = Primary,
-    secondary = Secondary,
+    secondary = NeonMagenta,
+    onSecondary = Color.Black,
+    secondaryContainer = DarkSurfaceVariant,
+    onSecondaryContainer = NeonMagenta,
+
+    tertiary = NeonPurple,
+    onTertiary = Color.White,
+
+    background = DarkBg,
+    onBackground = TextPrimary,
+
+    surface = DarkSurface,
+    onSurface = TextPrimary,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = TextSecondary,
+
+    outline = DarkOutline,
+    outlineVariant = DarkOutline,
+
+    error = StatusFailed,
+    onError = Color.White,
 )
 
 @Composable
 fun AudioBookTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true,   // Always dark for neon
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = NeonColorScheme,
         typography = AppTypography,
         content = content,
     )
