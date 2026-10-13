@@ -87,8 +87,8 @@ class TtsBatchWorker @AssistedInject constructor(
 
                     synthesizeOne(tts, text, outFile, actualIndex)
 
-                    // Restart TTS mỗi 10 chunk để tránh memory leak
-                    if (i > 0 && i % 10 == 0) {
+                    // Restart TTS mỗi 20 chunk để tránh memory leak
+                    if (i > 0 && i % 20 == 0) {
                         runCatching { tts.stop() }
                         runCatching { tts.shutdown() }
                         tts = initTts(voiceName, localeTag, pitch, rate)
