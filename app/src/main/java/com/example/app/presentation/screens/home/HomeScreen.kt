@@ -5,15 +5,54 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,15 +60,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.app.domain.model.AudioBook
 import com.example.app.domain.model.BookStatus
 import com.example.app.domain.service.VoicePresets
-import com.example.app.presentation.theme.*
+import com.example.app.presentation.theme.NeonCyan
+import com.example.app.presentation.theme.NeonGreen
+import com.example.app.presentation.theme.NeonMagenta
+import com.example.app.presentation.theme.NeonPurple
+import com.example.app.presentation.theme.NeonYellow
+import com.example.app.presentation.theme.StatusFailed
+import com.example.app.presentation.theme.TextMuted
+import com.example.app.presentation.theme.TextSecondary
 
-private val MIME_TYPES = arrayOf(
+private val SUPPORTED_MIME_TYPES = arrayOf(
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 )
@@ -45,10 +92,10 @@ fun HomeScreen(
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val synthesis by viewModel.synthesis.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val snackbar = remember { SnackbarHostState() }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         runCatching {
@@ -56,15 +103,17 @@ fun HomeScreen(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         }
-        viewModel.onFilePicked(uri, uri.lastPathSegment?.substringAfterLast('/'))
+        val name = uri.lastPathSegment?.substringAfterLast('/')
+        viewModel.onFilePicked(uri, name)
     }
 
     LaunchedEffect(Unit) {
-        viewModel.events.collect { e ->
-            when (e) {
-                is HomeEvent.Message -> snackbar.showSnackbar(e.text)
-                is HomeEvent.Imported -> snackbar.showSnackbar("Đã thêm sách")
-                is HomeEvent.NavigateToPlayer -> onOpenPlayer(e.bookId)
+        viewModel.events.collect { event ->
+            when (event) {
+                is HomeEvent.Message -> snackbarHostState.showSnackbar(event.text)
+                is HomeEvent.Imported ->
+                    snackbarHostState.showSnackbar("Đã thêm sách vào thư viện")
+                is HomeEvent.NavigateToPlayer -> onOpenPlayer(event.bookId)
             }
         }
     }
@@ -74,92 +123,145 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AutoStories, null, tint = NeonCyan)
+                        Icon(
+                            Icons.Default.AutoStories,
+                            contentDescription = null,
+                            tint = NeonCyan,
+                            modifier = Modifier.size(28.dp),
+                        )
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("AudioBook", style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold)
-                            Text("Thư viện của bạn",
+                            Text(
+                                "AudioBook",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                            Text(
+                                "Thư viện của bạn",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted)
+                                color = TextMuted,
+                            )
                         }
                     }
                 },
                 actions = {
                     if (stats.failed > 0) {
                         IconButton(onClick = viewModel::onDeleteAllFailed) {
-                            Icon(Icons.Default.DeleteSweep, "Xoá lỗi",
-                                tint = StatusFailed)
+                            Icon(
+                                Icons.Default.DeleteSweep,
+                                contentDescription = "Xoá tất cả lỗi",
+                                tint = StatusFailed,
+                            )
                         }
                     }
                     IconButton(
-                        onClick = { picker.launch(MIME_TYPES) },
+                        onClick = { filePicker.launch(SUPPORTED_MIME_TYPES) },
                         modifier = Modifier
                             .padding(end = 8.dp)
                             .clip(CircleShape)
                             .background(NeonCyan),
                     ) {
-                        Icon(Icons.Default.Add, "Thêm", tint = Color.Black)
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Thêm sách",
+                            tint = Color.Black,
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    containerColor = Color.Transparent,
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
             StatsRow(stats)
 
-            Box(Modifier.weight(1f)) {
-                when (val s = uiState) {
-                    HomeUiState.Loading -> Box(Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (val state = uiState) {
+                    HomeUiState.Loading -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         CircularProgressIndicator(color = NeonCyan)
                     }
-                    is HomeUiState.Error -> Box(Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center) {
-                        Text(s.message, color = StatusFailed)
+
+                    is HomeUiState.Error -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            state.message,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = StatusFailed,
+                        )
                     }
+
                     is HomeUiState.Success -> {
-                        if (s.books.isEmpty()) EmptyState()
-                        else LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            items(s.books, key = { it.id }) { book ->
-                                BookCard(
-                                    book = book,
-                                    progress = synthesis[book.id],
-                                    onPlay = { onOpenPlayer(book.id) },
-                                    onSynth = {
-                                        viewModel.onSynthesize(book.id,
-                                            VoicePresets.findById(book.voiceProfileId))
-                                    },
-                                    onCancel = { viewModel.onCancelSynthesis(book.id) },
-                                    onDelete = { viewModel.onDelete(book.id) },
-                                )
+                        if (state.books.isEmpty()) {
+                            EmptyState()
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = 16.dp,
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(state.books, key = { it.id }) { book ->
+                                    NeonBookCard(
+                                        book = book,
+                                        progress = synthesis[book.id],
+                                        onPlay = { onOpenPlayer(book.id) },
+                                        onSynthesize = {
+                                            viewModel.onSynthesize(
+                                                book.id,
+                                                VoicePresets.findById(book.voiceProfileId),
+                                            )
+                                        },
+                                        onCancel = { viewModel.onCancelSynthesis(book.id) },
+                                        onDelete = { viewModel.onDelete(book.id) },
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Surface(color = MaterialTheme.colorScheme.surface) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
                 ) {
-                    Icon(Icons.Default.LibraryMusic, null,
-                        tint = NeonMagenta, modifier = Modifier.size(20.dp))
+                    Icon(
+                        Icons.Default.LibraryMusic,
+                        contentDescription = null,
+                        tint = NeonMagenta,
+                        modifier = Modifier.size(20.dp),
+                    )
                     Spacer(Modifier.width(8.dp))
-                    Text("Đã sẵn sàng: ${stats.ready} sách",
+                    Text(
+                        "Đã sẵn sàng: ${stats.ready} sách",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary)
+                        color = TextSecondary,
+                    )
                 }
             }
         }
@@ -169,7 +271,9 @@ fun HomeScreen(
 @Composable
 private fun StatsRow(stats: HomeStats) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         StatChip("Tổng", stats.total, NeonPurple, Modifier.weight(1f))
@@ -180,34 +284,47 @@ private fun StatsRow(stats: HomeStats) {
 }
 
 @Composable
-private fun StatChip(label: String, value: Int, color: Color, modifier: Modifier) {
+private fun StatChip(
+    label: String,
+    value: Int,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier
+        modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(vertical = 10.dp),
+            .border(
+                width = 1.dp,
+                color = color.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
     ) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(value.toString(),
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                value.toString(),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = color)
-            Text(label,
+                fontWeight = FontWeight.Bold,
+                color = color,
+            )
+            Text(
+                label,
                 style = MaterialTheme.typography.labelSmall,
-                color = TextMuted, maxLines = 1)
+                color = TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
 
 @Composable
-private fun BookCard(
+private fun NeonBookCard(
     book: AudioBook,
     progress: SynthesisProgress?,
     onPlay: () -> Unit,
-    onSynth: () -> Unit,
+    onSynthesize: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -217,57 +334,85 @@ private fun BookCard(
         BookStatus.FAILED -> StatusFailed
         BookStatus.IMPORTED -> NeonMagenta
     }
-    val processing = book.status == BookStatus.PROCESSING
-    val ready = book.status == BookStatus.READY && book.audioPath != null
-    val failed = book.status == BookStatus.FAILED
+    val isProcessing = book.status == BookStatus.PROCESSING
+    val isReady = book.status == BookStatus.READY && book.audioPath != null
+    val isFailed = book.status == BookStatus.FAILED
     val canPreview = progress?.canPreview == true
 
     Card(
-        Modifier.fillMaxWidth()
-            .border(1.dp,
-                Brush.linearGradient(listOf(statusColor.copy(alpha = 0.6f),
-                    Color.Transparent)),
-                RoundedCornerShape(16.dp)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    listOf(
+                        statusColor.copy(alpha = 0.6f),
+                        Color.Transparent,
+                    ),
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor),
+                )
                 Spacer(Modifier.width(8.dp))
-                Text(book.status.name,
+                Text(
+                    book.status.name,
                     style = MaterialTheme.typography.labelSmall,
-                    color = statusColor, fontWeight = FontWeight.Bold)
+                    color = statusColor,
+                    fontWeight = FontWeight.Bold,
+                )
                 if (canPreview) {
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        Modifier
+                        modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(NeonCyan.copy(alpha = 0.15f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text("Nghe được",
+                        Text(
+                            "Nghe được",
                             style = MaterialTheme.typography.labelSmall,
-                            color = NeonCyan, fontWeight = FontWeight.Bold)
+                            color = NeonCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }
+
             Spacer(Modifier.height(8.dp))
-            Text(book.title,
+
+            Text(
+                book.title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold, maxLines = 2)
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
 
             if (progress != null) {
                 Spacer(Modifier.height(12.dp))
                 LinearProgressIndicator(
                     progress = { progress.percent / 100f },
-                    modifier = Modifier.fillMaxWidth().height(6.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = NeonCyan,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "Đang xử lý ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
                     style = MaterialTheme.typography.labelSmall,
@@ -277,31 +422,57 @@ private fun BookCard(
 
             Spacer(Modifier.height(12.dp))
 
+            // NÚT "NGHE NGAY" / "NGHE TRƯỚC" full-width
+            if (isReady || (isProcessing && canPreview)) {
+                Button(
+                    onClick = onPlay,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isReady) NeonGreen else NeonCyan,
+                        contentColor = Color.Black,
+                    ),
+                ) {
+                    Icon(
+                        if (isReady) Icons.Default.PlayArrow
+                        else Icons.Default.Headphones,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (isReady) "Nghe ngay" else "Nghe trước",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             Row(
-                Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onSynth, enabled = !processing && !ready && !failed) {
-                    Icon(Icons.Default.GraphicEq, "Tạo",
-                        tint = if (!processing && !ready && !failed) NeonPurple
-                        else TextMuted)
+                IconButton(
+                    onClick = onSynthesize,
+                    enabled = !isProcessing && !isReady && !isFailed,
+                ) {
+                    Icon(
+                        Icons.Default.GraphicEq,
+                        contentDescription = "Tạo audio",
+                        tint = if (!isProcessing && !isReady && !isFailed)
+                            NeonPurple else TextMuted,
+                    )
                 }
-                if (processing && canPreview) {
-                    IconButton(onClick = onPlay) {
-                        Icon(Icons.Default.Headphones, "Nghe thử", tint = NeonCyan)
-                    }
-                } else {
-                    IconButton(onClick = onPlay, enabled = ready) {
-                        Icon(Icons.Default.PlayArrow, "Nghe",
-                            tint = if (ready) NeonGreen else TextMuted)
-                    }
-                }
+
                 when {
-                    processing -> IconButton(onClick = onCancel) {
+                    isProcessing -> IconButton(onClick = onCancel) {
                         Icon(Icons.Default.Cancel, "Huỷ", tint = StatusFailed)
                     }
-                    failed -> {
-                        IconButton(onClick = onSynth) {
+                    isFailed -> {
+                        IconButton(onClick = onSynthesize) {
                             Icon(Icons.Default.Refresh, "Thử lại", tint = NeonYellow)
                         }
                         IconButton(onClick = onDelete) {
@@ -320,20 +491,17 @@ private fun BookCard(
 @Composable
 private fun EmptyState() {
     Column(
-        Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(Icons.Default.AutoStories, null,
+        Icon(
+            Icons.Default.AutoStories,
+            contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = NeonCyan.copy(alpha = 0.4f))
+            tint = NeonCyan.copy(alpha = 0.4f),
+        )
         Spacer(Modifier.height(16.dp))
-        Text("Chưa có sách nào",
-            style = MaterialTheme.typography.titleMedium,
-            color = TextSecondary)
-        Spacer(Modifier.height(4.dp))
-        Text("Nhấn nút + ở góc trên để thêm sách",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextMuted)
-    }
-}
+        Text(
+            "Chưa có sách nào",
+            style = MaterialTheme.typography.tit
