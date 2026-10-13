@@ -130,6 +130,6 @@ class SynthesisOrchestrator @Inject constructor(
     private fun tag(bookId: Long) = "synth_book_$bookId"
 
     companion object {
-        private const val PARALLEL_LANES = 4
+        private const val PARALLEL_LANES = 6
     }
 }
