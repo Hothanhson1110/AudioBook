@@ -20,3 +20,10 @@ data class HomeStats(
     val processing: Int = 0,
     val failed: Int = 0,
 )
+
+data class SynthesisProgress(
+    val doneChunks: Int,
+    val totalChunks: Int,
+    val percent: Int,
+    val canPreview: Boolean,  // >= 25% done
+)
