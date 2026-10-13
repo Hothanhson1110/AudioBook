@@ -8,6 +8,7 @@ import androidx.navigation.toRoute
 import com.example.app.presentation.screens.home.HomeScreen
 import com.example.app.presentation.screens.library.LibraryScreen
 import com.example.app.presentation.screens.player.PlayerScreen
+import com.example.app.presentation.screens.settings.SettingsScreen
 
 @Composable
 fun AudioBookNavHost() {
@@ -22,6 +23,7 @@ fun AudioBookNavHost() {
                     }
                 },
                 onOpenLibrary = { navController.navigate(Route.Library) },
+                onOpenSettings = { navController.navigate(Route.Settings) },
             )
         }
         composable<Route.Library> {
@@ -31,9 +33,10 @@ fun AudioBookNavHost() {
         }
         composable<Route.Player> { backStackEntry ->
             val route = backStackEntry.toRoute<Route.Player>()
-            PlayerScreen(
-                onBack = { navController.popBackStack() },
-            )
+            PlayerScreen(onBack = { navController.popBackStack() })
+        }
+        composable<Route.Settings> {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
