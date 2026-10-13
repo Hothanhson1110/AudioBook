@@ -5,6 +5,16 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:        # ← THÊM DÒNG NÀY — cho phép trigger thủ công
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,6 +25,9 @@ jobs:
     name: Lint + Unit Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Bỏ qua job này khi trigger manual → build nhanh hơn
+    if: github.event_name != 'workflow_dispatch'
 
     steps:
       - name: Checkout
@@ -54,18 +67,17 @@ jobs:
           name: lint-report
           path: app/build/reports/lint-results-debug.html
 
-      - name: Upload test results to Codecov
-        if: always()
-        uses: codecov/codecov-action@v4
-        with:
-          files: app/build/reports/jacoco/testDebugUnitTest/testDebugUnitTest.xml
-          fail_ci_if_error: false
-
   build-debug:
     name: Build Debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: lint-and-test
+    needs: [lint-and-test]
+    # Chạy job này khi:
+    # - Trigger manual
+    # - HOẶC lint-and-test pass
+    if: |
+      always() && 
+      (github.event_name == 'workflow_dispatch' || needs.lint-and-test.result == 'success')
 
     steps:
       - name: Checkout
@@ -83,12 +95,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
+          name: debug-apk-${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+          retention-days: 30
