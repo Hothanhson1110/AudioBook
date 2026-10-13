@@ -22,6 +22,7 @@ turbine = "1.2.0"
 pdfboxAndroid = "2.0.27.0"
 kotlinxSerialization = "1.7.3"
 media3 = "1.5.1"
+datastore = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
