@@ -11,6 +11,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.app.domain.model.BookStatus
 import com.example.app.domain.repository.AudioBookRepository
+import com.example.app.domain.repository.SynthesisState
 import com.example.app.domain.usecase.GetBookUseCase
 import com.example.app.domain.usecase.UpdatePlaybackUseCase
 import com.google.common.util.concurrent.MoreExecutors
@@ -57,7 +58,6 @@ class PlayerViewModel @Inject constructor(
                 return@launch
             }
 
-            // Quyết định mode: file hoàn chỉnh vs streaming chunks
             val isReady = book.status == BookStatus.READY && book.audioPath != null
             val isStreamingMode = !isReady && book.status == BookStatus.PROCESSING
 
@@ -116,16 +116,17 @@ class PlayerViewModel @Inject constructor(
                     c.seekTo(book.lastPositionMs)
                     c.playWhenReady = true
 
+                    // ⬇️ Sync speed thực tế từ controller (giữ từ session trước)
+                    val actualSpeed = c.playbackParameters.speed
+
                     _uiState.value = _uiState.value.copy(
                         title = book.title,
                         durationMs = book.durationMs,
                         isLoading = false,
                         isStreamingMode = isStreaming,
-                        streamingProgress = if (isStreaming) {
-                            // Sẽ update từ flow observer bên dưới
-                            _uiState.value.streamingProgress
-                        } else 100,
+                        streamingProgress = if (isStreaming) 0 else 100,
                         totalChapters = initialItems.size.coerceAtLeast(1),
+                        speed = actualSpeed,
                     )
                     startTicker()
 
@@ -140,20 +141,16 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Trong streaming mode: theo dõi synthesis progress + bổ sung chunks mới khi có.
-     */
     private fun startStreamingWatcher() {
         streamingJob?.cancel()
         streamingJob = viewModelScope.launch {
             repository.observeSynthesisState(bookId)
                 .onEach { state ->
                     when (state) {
-                        is com.example.app.domain.repository.SynthesisState.Running -> {
+                        is SynthesisState.Running -> {
                             _uiState.value = _uiState.value.copy(
                                 streamingProgress = state.progressPercent,
                             )
-                            // Load thêm chunks nếu có
                             val chunks = repository.getAvailableChunks(bookId)
                             if (chunks.size > loadedChunkCount) {
                                 val c = controller ?: return@onEach
@@ -178,14 +175,12 @@ class PlayerViewModel @Inject constructor(
                                 )
                             }
                         }
-                        is com.example.app.domain.repository.SynthesisState.Completed -> {
-                            // Synthesis xong → switch sang m4a (nếu user chưa nghe hết)
+                        is SynthesisState.Completed -> {
                             val book = getBook(bookId)
                             if (book?.audioPath != null) {
                                 val c = controller ?: return@onEach
                                 val currentIdx = c.currentMediaItemIndex
                                 val currentPos = c.currentPosition
-                                // Chỉ switch nếu còn đang phát sớm
                                 if (currentIdx < 2) {
                                     val item = MediaItem.Builder()
                                         .setUri(book.audioPath)
@@ -228,8 +223,8 @@ class PlayerViewModel @Inject constructor(
                     durationMs = c.duration.coerceAtLeast(0),
                     isPlaying = c.isPlaying,
                     isBuffering = c.playbackState == Player.STATE_BUFFERING,
-                    currentChapter = if (isStreaming) c.currentMediaItemIndex + 1
-                    else 1,
+                    currentChapter = if (isStreaming) c.currentMediaItemIndex + 1 else 1,
+                    speed = c.playbackParameters.speed,   // ⬅️ luôn đồng bộ
                 )
                 if (kotlin.math.abs(position - lastSavedPosition) > 5000) {
                     lastSavedPosition = position
@@ -262,12 +257,18 @@ class PlayerViewModel @Inject constructor(
         controller?.seekToPreviousMediaItem()
     }
 
+    /** Set speed trực tiếp (dùng cho dropdown) */
+    fun setSpeed(speed: Float) {
+        controller?.setPlaybackSpeed(speed)
+        _uiState.value = _uiState.value.copy(speed = speed)
+    }
+
+    /** Cycle speed (giữ cho nút legacy nếu cần) */
     fun cycleSpeed() {
-        val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 3f)
+        val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
         val current = _uiState.value.speed
         val next = speeds[(speeds.indexOf(current) + 1).mod(speeds.size)]
-        controller?.setPlaybackSpeed(next)
-        _uiState.value = _uiState.value.copy(speed = next)
+        setSpeed(next)
     }
 
     fun cycleRepeat() {
@@ -297,6 +298,7 @@ class PlayerViewModel @Inject constructor(
         )
     }
 
+    /** Đặt sleep timer. minutes <= 0 → cancel. */
     fun setSleepTimer(minutes: Int) {
         sleepJob?.cancel()
         if (minutes <= 0) {
