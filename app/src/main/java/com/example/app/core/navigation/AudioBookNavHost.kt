@@ -16,7 +16,11 @@ fun AudioBookNavHost() {
     NavHost(navController = navController, startDestination = Route.Home) {
         composable<Route.Home> {
             HomeScreen(
-                onOpenPlayer = { id -> navController.navigate(Route.Player(id)) },
+                onOpenPlayer = { id ->
+                    navController.navigate(Route.Player(id)) {
+                        launchSingleTop = true
+                    }
+                },
                 onOpenLibrary = { navController.navigate(Route.Library) },
             )
         }
