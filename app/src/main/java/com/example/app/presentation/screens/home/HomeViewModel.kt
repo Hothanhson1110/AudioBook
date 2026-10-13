@@ -3,6 +3,7 @@ package com.example.app.presentation.screens.home
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.app.domain.model.BookStatus
 import com.example.app.domain.repository.SynthesisState
 import com.example.app.domain.service.ImportProgress
 import com.example.app.domain.service.VoiceProfile
@@ -34,6 +35,9 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _stats = MutableStateFlow(HomeStats())
+    val stats = _stats.asStateFlow()
+
     private val _synthesis = MutableStateFlow<Map<Long, SynthesisState>>(emptyMap())
     val synthesis = _synthesis.asStateFlow()
 
@@ -44,7 +48,15 @@ class HomeViewModel @Inject constructor(
 
     init {
         observeBooks()
-            .onEach { books -> _uiState.value = HomeUiState.Success(books) }
+            .onEach { books ->
+                _uiState.value = HomeUiState.Success(books)
+                _stats.value = HomeStats(
+                    total = books.size,
+                    ready = books.count { it.status == BookStatus.READY },
+                    processing = books.count { it.status == BookStatus.PROCESSING },
+                    failed = books.count { it.status == BookStatus.FAILED },
+                )
+            }
             .catch { t -> _uiState.value = HomeUiState.Error(t.message ?: "Load failed") }
             .launchIn(viewModelScope)
     }
@@ -59,6 +71,9 @@ class HomeViewModel @Inject constructor(
                 when (progress) {
                     is ImportProgress.Completed -> {
                         _events.send(HomeEvent.Imported(progress.bookId))
+                        // Auto navigate sang Player
+                        _events.send(HomeEvent.NavigateToPlayer(progress.bookId))
+                        // Bắt đầu synthesis luôn
                         onSynthesize(progress.bookId, VoicePresets.VIETNAMESE.first())
                     }
                     is ImportProgress.Failed ->
@@ -69,13 +84,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onSynthesize(bookId: Long, profile: VoiceProfile) {
-        // Nếu đang có synthesis job active → bỏ qua
         if (synthesisJobs[bookId]?.isActive == true) return
-
-        // Nếu book đang PROCESSING → bỏ qua (tránh double-trigger)
-        val currentBook = (_uiState.value as? HomeUiState.Success)
-            ?.books?.firstOrNull { it.id == bookId }
-        if (currentBook?.status == com.example.app.domain.model.BookStatus.PROCESSING) return
 
         synthesisJobs[bookId] = viewModelScope.launch {
             _synthesis.value = _synthesis.value + (bookId to SynthesisState.Running(0))
@@ -104,9 +113,6 @@ class HomeViewModel @Inject constructor(
                     synthesisJobs.remove(bookId)
                     _events.send(HomeEvent.Message(t.message ?: "Synthesis failed"))
                 }
-
-            // QUAN TRỌNG: job kết thúc ngay sau khi enqueue, nhưng ta vẫn cần giữ
-            // state job active cho đến khi observeState emit Completed/Failed
         }
     }
 
@@ -120,5 +126,14 @@ class HomeViewModel @Inject constructor(
 
     fun onDelete(bookId: Long) {
         viewModelScope.launch { deleteBook(bookId) }
+    }
+
+    fun onDeleteAllFailed() {
+        val current = (_uiState.value as? HomeUiState.Success)?.books ?: return
+        viewModelScope.launch {
+            current.filter { it.status == BookStatus.FAILED }
+                .forEach { deleteBook(it.id) }
+            _events.send(HomeEvent.Message("Đã xoá các sách lỗi"))
+        }
     }
 }
