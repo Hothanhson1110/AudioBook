@@ -64,6 +64,10 @@ class HomeViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    // -------------------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------------------
+
     fun onFilePicked(uri: Uri, displayName: String? = null) {
         val title = displayName
             ?: uri.lastPathSegment?.substringAfterLast('/')
@@ -74,7 +78,7 @@ class HomeViewModel @Inject constructor(
                 when (progress) {
                     is ImportProgress.Completed -> {
                         _events.send(HomeEvent.Imported(progress.bookId))
-                        // Dung cai dat giong doc hien tai
+                        // Tu dong bat dau synthesize voi cai dat giong doc hien tai
                         val settings = getVoiceSettings().first()
                         val profile = VoiceComposer.compose(settings)
                         onSynthesize(progress.bookId, profile)
@@ -86,12 +90,21 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Synthesis
+    // -------------------------------------------------------------------------
+
     fun onSynthesize(bookId: Long, profile: VoiceProfile) {
         if (synthesisJobs[bookId]?.isActive == true) return
 
         synthesisJobs[bookId] = viewModelScope.launch {
             _synthesis.value = _synthesis.value + (
-                bookId to SynthesisProgress(0, 0, 0, false)
+                bookId to SynthesisProgress(
+                    doneChunks = 0,
+                    totalChunks = 0,
+                    percent = 0,
+                    canPreview = false,
+                )
             )
 
             synthesizeBook.observeState(bookId)
@@ -133,6 +146,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-synthesize voi cai dat giong doc hien tai trong Settings.
+     */
+    fun onResynthesize(bookId: Long) {
+        viewModelScope.launch {
+            val settings = getVoiceSettings().first()
+            val profile = VoiceComposer.compose(settings)
+            onSynthesize(bookId, profile)
+        }
+    }
+
     fun onCancelSynthesis(bookId: Long) {
         synthesisJobs.remove(bookId)?.cancel()
         viewModelScope.launch {
@@ -140,6 +164,10 @@ class HomeViewModel @Inject constructor(
             _synthesis.value = _synthesis.value - bookId
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Delete
+    // -------------------------------------------------------------------------
 
     fun onDelete(bookId: Long) {
         viewModelScope.launch { deleteBook(bookId) }
