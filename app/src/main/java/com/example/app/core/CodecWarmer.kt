@@ -11,7 +11,6 @@ object CodecWarmer {
 
     private const val TAG = "CodecWarmer"
 
-    /** Warm up AAC encoder 1 lần để lần đầu encode không bị chậm 8 phút. */
     suspend fun warmUp(cacheDir: File) = withContext(Dispatchers.IO) {
         try {
             val format = MediaFormat.createAudioFormat(
@@ -23,7 +22,6 @@ object CodecWarmer {
             val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
-            // Encode 1 frame trống để load native lib
             val inputIdx = codec.dequeueInputBuffer(100_000)
             if (inputIdx >= 0) {
                 codec.queueInputBuffer(
@@ -38,4 +36,4 @@ object CodecWarmer {
             Log.w(TAG, "Codec warm-up failed: ${t.message}")
         }
     }
-}a
+}
