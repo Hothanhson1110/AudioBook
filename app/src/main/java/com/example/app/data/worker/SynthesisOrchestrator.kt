@@ -58,14 +58,29 @@ class SynthesisOrchestrator @Inject constructor(
             WorkerLogger.log(context, "Orchestrator", "chunks: ${chunks.size}")
             require(chunks.isNotEmpty()) { "No text to synthesize" }
 
-            // Chia thành tối đa 4 batch chạy song song
+            // Lưu toàn bộ chunks vào file — worker đọc lại
+            val chunksFile = File(context.filesDir, "audio/book_$bookId.chunks.txt")
+            chunksFile.parentFile?.mkdirs()
+            chunksFile.bufferedWriter().use { w ->
+                chunks.forEach { chunk ->
+                    // Escape newline trong chunk để tách an toàn
+                    val safe = chunk.replace('\n', ' ').replace('\r', ' ')
+                    w.write(safe)
+                    w.newLine()
+                }
+            }
+            WorkerLogger.log(
+                context, "Orchestrator",
+                "saved chunks to ${chunksFile.absolutePath} (${chunksFile.length()} bytes)"
+            )
+
+            // Chia thành 4 batch (chỉ truyền index range, không truyền text)
             val batchCount = minOf(PARALLEL_LANES, chunks.size)
             val batchSize = (chunks.size + batchCount - 1) / batchCount
 
             val batchRequests = (0 until batchCount).map { batchIdx ->
                 val start = batchIdx * batchSize
                 val end = minOf(start + batchSize, chunks.size)
-                val batchTexts = chunks.subList(start, end).toTypedArray()
 
                 OneTimeWorkRequestBuilder<TtsBatchWorker>()
                     .setInputData(
@@ -73,7 +88,7 @@ class SynthesisOrchestrator @Inject constructor(
                             TtsBatchWorker.KEY_BOOK_ID to bookId,
                             TtsBatchWorker.KEY_BATCH_INDEX to batchIdx,
                             TtsBatchWorker.KEY_START_INDEX to start,
-                            TtsBatchWorker.KEY_TEXTS to batchTexts,
+                            TtsBatchWorker.KEY_END_INDEX to end,
                             TtsBatchWorker.KEY_VOICE to profile.voiceName,
                             TtsBatchWorker.KEY_LOCALE to profile.localeTag,
                             TtsBatchWorker.KEY_PITCH to profile.pitch,
@@ -109,15 +124,12 @@ class SynthesisOrchestrator @Inject constructor(
         WorkerLogger.log(context, "Orchestrator", "cancel $bookId")
         workManager.cancelAllWorkByTag(tag(bookId))
         File(context.filesDir, "audio/book_$bookId").deleteRecursively()
+        File(context.filesDir, "audio/book_$bookId.chunks.txt").delete()
     }
 
     private fun tag(bookId: Long) = "synth_book_$bookId"
 
     companion object {
-        // Số batch chạy song song. 4 là sweet spot:
-        // - Đủ nhanh (dùng 4 core)
-        // - Không overwhelm TTS engine
-        // - RAM an toàn (~4 TTS instance)
         private const val PARALLEL_LANES = 4
     }
 }
