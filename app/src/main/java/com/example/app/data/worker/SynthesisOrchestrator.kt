@@ -34,13 +34,14 @@ class SynthesisOrchestrator @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         val existing = dao.getById(bookId)
         if (existing?.status == BookStatus.PROCESSING.name) {
-            WorkerLogger.log(context, "Orchestrator", "skip: book $bookId đang PROCESSING")
+            WorkerLogger.log(context, "Orchestrator", "skip: $bookId đang PROCESSING")
             return@withContext
         }
 
         WorkerLogger.log(context, "Orchestrator", "=== START book $bookId ===")
 
         File(context.filesDir, "audio/book_$bookId.m4a").delete()
+        File(context.filesDir, "audio/book_$bookId").deleteRecursively()
 
         dao.updateAudio(bookId, null, BookStatus.PROCESSING.name, 0L)
 
@@ -57,17 +58,26 @@ class SynthesisOrchestrator @Inject constructor(
             WorkerLogger.log(context, "Orchestrator", "chunks: ${chunks.size}")
             require(chunks.isNotEmpty()) { "No text to synthesize" }
 
-            val chunkRequests = chunks.mapIndexed { index, text ->
-                OneTimeWorkRequestBuilder<TtsChunkWorker>()
+            // Chia thành tối đa 4 batch chạy song song
+            val batchCount = minOf(PARALLEL_LANES, chunks.size)
+            val batchSize = (chunks.size + batchCount - 1) / batchCount
+
+            val batchRequests = (0 until batchCount).map { batchIdx ->
+                val start = batchIdx * batchSize
+                val end = minOf(start + batchSize, chunks.size)
+                val batchTexts = chunks.subList(start, end).toTypedArray()
+
+                OneTimeWorkRequestBuilder<TtsBatchWorker>()
                     .setInputData(
                         workDataOf(
-                            TtsChunkWorker.KEY_BOOK_ID to bookId,
-                            TtsChunkWorker.KEY_INDEX to index,
-                            TtsChunkWorker.KEY_TEXT to text,
-                            TtsChunkWorker.KEY_VOICE to profile.voiceName,
-                            TtsChunkWorker.KEY_LOCALE to profile.localeTag,
-                            TtsChunkWorker.KEY_PITCH to profile.pitch,
-                            TtsChunkWorker.KEY_RATE to profile.speechRate,
+                            TtsBatchWorker.KEY_BOOK_ID to bookId,
+                            TtsBatchWorker.KEY_BATCH_INDEX to batchIdx,
+                            TtsBatchWorker.KEY_START_INDEX to start,
+                            TtsBatchWorker.KEY_TEXTS to batchTexts,
+                            TtsBatchWorker.KEY_VOICE to profile.voiceName,
+                            TtsBatchWorker.KEY_LOCALE to profile.localeTag,
+                            TtsBatchWorker.KEY_PITCH to profile.pitch,
+                            TtsBatchWorker.KEY_RATE to profile.speechRate,
                         )
                     )
                     .addTag(tag(bookId))
@@ -80,11 +90,14 @@ class SynthesisOrchestrator @Inject constructor(
                 .build()
 
             workManager
-                .beginUniqueWork(tag(bookId), ExistingWorkPolicy.KEEP, chunkRequests)
+                .beginUniqueWork(tag(bookId), ExistingWorkPolicy.KEEP, batchRequests)
                 .then(mergeRequest)
                 .enqueue()
 
-            WorkerLogger.log(context, "Orchestrator", "enqueued ${chunkRequests.size} workers")
+            WorkerLogger.log(
+                context, "Orchestrator",
+                "enqueued $batchCount batches × $batchSize chunks"
+            )
         } catch (t: Throwable) {
             WorkerLogger.logError(context, "Orchestrator", t)
             dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
@@ -93,10 +106,18 @@ class SynthesisOrchestrator @Inject constructor(
     }
 
     fun cancel(bookId: Long) {
-        WorkerLogger.log(context, "Orchestrator", "cancel book $bookId")
+        WorkerLogger.log(context, "Orchestrator", "cancel $bookId")
         workManager.cancelAllWorkByTag(tag(bookId))
         File(context.filesDir, "audio/book_$bookId").deleteRecursively()
     }
 
     private fun tag(bookId: Long) = "synth_book_$bookId"
+
+    companion object {
+        // Số batch chạy song song. 4 là sweet spot:
+        // - Đủ nhanh (dùng 4 core)
+        // - Không overwhelm TTS engine
+        // - RAM an toàn (~4 TTS instance)
+        private const val PARALLEL_LANES = 4
+    }
 }
