@@ -32,7 +32,6 @@ class SynthesisOrchestrator @Inject constructor(
         sourceUri: String,
         profile: VoiceProfile,
     ) = withContext(Dispatchers.IO) {
-        // Nếu book đã đang PROCESSING → bỏ qua, không tạo work trùng
         val existing = dao.getById(bookId)
         if (existing?.status == BookStatus.PROCESSING.name) {
             WorkerLogger.log(context, "Orchestrator", "skip: book $bookId đang PROCESSING")
@@ -41,7 +40,6 @@ class SynthesisOrchestrator @Inject constructor(
 
         WorkerLogger.log(context, "Orchestrator", "=== START book $bookId ===")
 
-        // Chỉ xoá file output cũ (.m4a), KHÔNG xoá chunkDir
         File(context.filesDir, "audio/book_$bookId.m4a").delete()
 
         dao.updateAudio(bookId, null, BookStatus.PROCESSING.name, 0L)
@@ -81,7 +79,6 @@ class SynthesisOrchestrator @Inject constructor(
                 .addTag(tag(bookId))
                 .build()
 
-            // KEEP: nếu đã có unique work cùng tên → bỏ qua, không chạy song song
             workManager
                 .beginUniqueWork(tag(bookId), ExistingWorkPolicy.KEEP, chunkRequests)
                 .then(mergeRequest)
@@ -98,9 +95,8 @@ class SynthesisOrchestrator @Inject constructor(
     fun cancel(bookId: Long) {
         WorkerLogger.log(context, "Orchestrator", "cancel book $bookId")
         workManager.cancelAllWorkByTag(tag(bookId))
-        // Xoá chunks khi user chủ động cancel
         File(context.filesDir, "audio/book_$bookId").deleteRecursively()
     }
 
     private fun tag(bookId: Long) = "synth_book_$bookId"
-}a
+}
