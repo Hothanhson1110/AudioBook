@@ -2,6 +2,7 @@ package com.example.app.domain.usecase
 
 import app.cash.turbine.test
 import com.example.app.domain.model.AudioBook
+import com.example.app.domain.model.BookStatus
 import com.example.app.domain.repository.AudioBookRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -24,8 +25,8 @@ class ObserveBooksUseCaseTest {
     }
 
     @Test
-    @DisplayName("emit danh sách audio books từ repository")
-    fun `returns books from repository`() = runTest {
+    @DisplayName("Returns books from repository")
+    fun returnsBooks() = runTest {
         val expected = listOf(
             AudioBook(
                 id = 1,
@@ -33,7 +34,7 @@ class ObserveBooksUseCaseTest {
                 sourceUri = "content://a.pdf",
                 audioPath = null,
                 durationMs = 1000L,
-                status = com.example.app.domain.model.BookStatus.IMPORTED,
+                status = BookStatus.IMPORTED,
                 createdAt = 0L,
             ),
         )

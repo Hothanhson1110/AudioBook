@@ -7,22 +7,29 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.app.presentation.screens.home.HomeScreen
 import com.example.app.presentation.screens.library.LibraryScreen
-import com.example.app.presentation.screens.reader.ReaderScreen
+import com.example.app.presentation.screens.player.PlayerScreen
 
 @Composable
 fun AudioBookNavHost() {
     val navController = rememberNavController()
+
     NavHost(navController = navController, startDestination = Route.Home) {
         composable<Route.Home> {
             HomeScreen(
-                onOpenReader = { id -> navController.navigate(Route.Reader(id)) },
-                onOpenLibrary = { navController.navigate(Route.Library) }
+                onOpenPlayer = { id -> navController.navigate(Route.Player(id)) },
+                onOpenLibrary = { navController.navigate(Route.Library) },
             )
         }
-        composable<Route.Library> { LibraryScreen() }
-        composable<Route.Reader> { backStackEntry ->
-            val route = backStackEntry.toRoute<Route.Reader>()
-            ReaderScreen(bookId = route.bookId, onBack = navController::popBackStack)
+        composable<Route.Library> {
+            LibraryScreen(
+                onOpenPlayer = { id -> navController.navigate(Route.Player(id)) },
+            )
+        }
+        composable<Route.Player> { backStackEntry ->
+            val route = backStackEntry.toRoute<Route.Player>()
+            PlayerScreen(
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

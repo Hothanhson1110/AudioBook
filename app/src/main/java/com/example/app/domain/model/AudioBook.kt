@@ -8,6 +8,12 @@ data class AudioBook(
     val durationMs: Long,
     val status: BookStatus,
     val createdAt: Long,
+    val voiceProfileId: String = "vi_natural",
+    val voiceName: String = "",
+    val pitch: Float = 1f,
+    val speechRate: Float = 1f,
+    val lastPositionMs: Long = 0L,
+    val lastPlayedAt: Long = 0L,
 )
 
 enum class BookStatus { IMPORTED, PROCESSING, READY, FAILED }

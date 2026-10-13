@@ -1,19 +1,27 @@
 package com.example.app.domain.repository
 
 import com.example.app.domain.model.AudioBook
-import com.example.app.domain.service.SynthesisProgress
+import com.example.app.domain.model.Chapter
+import com.example.app.domain.service.ImportProgress
+import com.example.app.domain.service.VoiceProfile
 import kotlinx.coroutines.flow.Flow
 
 interface AudioBookRepository {
     fun observeBooks(): Flow<List<AudioBook>>
     suspend fun getBook(id: Long): AudioBook?
     fun importDocument(uriString: String, title: String): Flow<ImportProgress>
-    fun synthesize(bookId: Long): Flow<SynthesisProgress>
+    suspend fun synthesize(bookId: Long, profile: VoiceProfile)
+    fun observeSynthesisState(bookId: Long): Flow<SynthesisState>
+    suspend fun cancelSynthesis(bookId: Long)
     suspend fun deleteBook(id: Long)
+    suspend fun updatePlayback(bookId: Long, positionMs: Long)
+    suspend fun getChapters(bookId: Long): List<Chapter>
     suspend fun syncFromRemote(): Result<Unit>
 }
 
-sealed interface ImportProgress {
-    data class Completed(val bookId: Long) : ImportProgress
-    data class Failed(val message: String) : ImportProgress
+sealed interface SynthesisState {
+    data object Idle : SynthesisState
+    data class Running(val progressPercent: Int) : SynthesisState
+    data object Completed : SynthesisState
+    data class Failed(val message: String) : SynthesisState
 }

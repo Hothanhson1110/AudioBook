@@ -12,4 +12,10 @@ data class AudioBookEntity(
     val durationMs: Long,
     val status: String,
     val createdAt: Long,
+    val voiceProfileId: String = "vi_natural",
+    val voiceName: String = "",
+    val pitch: Float = 1.0f,
+    val speechRate: Float = 1.0f,
+    val lastPositionMs: Long = 0L,
+    val lastPlayedAt: Long = 0L,
 )

@@ -1,0 +1,1 @@
+-keep,allowobfuscation,allowshrinking class com.example.app.presentation.screens.home.HomeViewModel

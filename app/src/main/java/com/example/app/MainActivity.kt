@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
             AudioBookTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     AudioBookNavHost()
                 }

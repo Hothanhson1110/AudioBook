@@ -15,11 +15,6 @@ import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * .docx thực chất là ZIP chứa `word/document.xml`.
- * Ta parse XML này để lấy text từ các thẻ <w:p> (paragraph) và <w:t> (text run).
- * Cách này nhẹ hơn Apache POI (nặng >10MB, hay conflict trên Android).
- */
 @Singleton
 class WordDocumentParser @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -30,7 +25,7 @@ class WordDocumentParser @Inject constructor(
     override fun parse(uriString: String): Flow<String> = flow {
         val uri = Uri.parse(uriString)
         val input = context.contentResolver.openInputStream(uri)
-            ?: error("Không mở được file: $uriString")
+            ?: error("Cannot open file: $uriString")
 
         input.use { stream ->
             ZipInputStream(BufferedInputStream(stream)).use { zip ->

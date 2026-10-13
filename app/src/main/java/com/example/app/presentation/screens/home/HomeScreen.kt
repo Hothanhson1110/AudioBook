@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.app.domain.model.AudioBook
+import com.example.app.domain.model.BookStatus
+import com.example.app.domain.repository.SynthesisState
+import com.example.app.domain.service.VoicePresets
 
 private val SUPPORTED_MIME_TYPES = arrayOf(
     "application/pdf",
@@ -48,7 +53,7 @@ private val SUPPORTED_MIME_TYPES = arrayOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onOpenReader: (Long) -> Unit,
+    onOpenPlayer: (Long) -> Unit,
     onOpenLibrary: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
@@ -57,12 +62,10 @@ fun HomeScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // SAF OpenDocument — không cần xin quyền storage
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        // Persist quyền đọc để lần sau mở lại app vẫn đọc được file
         runCatching {
             context.contentResolver.takePersistableUriPermission(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -75,7 +78,8 @@ fun HomeScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is HomeEvent.Message -> snackbarHostState.showSnackbar(event.text)
-                is HomeEvent.Imported -> snackbarHostState.showSnackbar("Đã thêm sách vào thư viện")
+                is HomeEvent.Imported ->
+                    snackbarHostState.showSnackbar("Da them sach vao thu vien")
             }
         }
     }
@@ -87,7 +91,7 @@ fun HomeScreen(
             ExtendedFloatingActionButton(
                 onClick = { filePicker.launch(SUPPORTED_MIME_TYPES) },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Thêm sách") },
+                text = { Text("Them sach") },
             )
         },
     ) { padding ->
@@ -115,9 +119,15 @@ fun HomeScreen(
                         items(state.books, key = { it.id }) { book ->
                             BookCard(
                                 book = book,
-                                progress = synthesis?.takeIf { it.bookId == book.id }?.percent,
-                                onRead = { onOpenReader(book.id) },
-                                onSynthesize = { viewModel.onSynthesize(book.id) },
+                                state = synthesis[book.id],
+                                onPlay = { onOpenPlayer(book.id) },
+                                onSynthesize = {
+                                    viewModel.onSynthesize(
+                                        book.id,
+                                        VoicePresets.findById(book.voiceProfileId),
+                                    )
+                                },
+                                onCancel = { viewModel.onCancelSynthesis(book.id) },
                                 onDelete = { viewModel.onDelete(book.id) },
                             )
                         }
@@ -131,38 +141,44 @@ fun HomeScreen(
 @Composable
 private fun BookCard(
     book: AudioBook,
-    progress: Int?,
-    onRead: () -> Unit,
+    state: SynthesisState?,
+    onPlay: () -> Unit,
     onSynthesize: () -> Unit,
+    onCancel: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "Trạng thái: ${book.status}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            if (progress != null) {
+            Text("Trang thai: ${book.status}", style = MaterialTheme.typography.bodySmall)
+
+            if (state is SynthesisState.Running) {
                 LinearProgressIndicator(
-                    progress = { progress / 100f },
+                    progress = { state.progressPercent / 100f },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
-                Text("Đang tạo audio… $progress%", style = MaterialTheme.typography.labelSmall)
+                Text(
+                    "Dang tao audio... ${state.progressPercent}%",
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
-            androidx.compose.foundation.layout.Row(
+
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onSynthesize) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Tạo audio")
+                    Icon(Icons.Default.GraphicEq, contentDescription = "Tao audio")
                 }
-                IconButton(onClick = onRead, enabled = book.audioPath != null) {
+                IconButton(
+                    onClick = onPlay,
+                    enabled = book.status == BookStatus.READY && book.audioPath != null,
+                ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Nghe")
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Xoá")
+                    Icon(Icons.Default.Delete, contentDescription = "Xoa")
                 }
             }
         }
@@ -176,7 +192,10 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Chưa có sách nào")
-        Text("Nhấn “Thêm sách” để chọn file PDF / Word", style = MaterialTheme.typography.bodySmall)
+        Text("Chua co sach nao")
+        Text(
+            "Nhan \"Them sach\" de chon file PDF / Word",
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }

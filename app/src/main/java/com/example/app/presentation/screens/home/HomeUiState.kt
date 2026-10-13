@@ -12,8 +12,3 @@ sealed interface HomeEvent {
     data class Message(val text: String) : HomeEvent
     data class Imported(val bookId: Long) : HomeEvent
 }
-
-data class SynthesisUiState(
-    val bookId: Long,
-    val percent: Int,
-)

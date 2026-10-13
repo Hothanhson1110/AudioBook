@@ -20,9 +20,23 @@ interface AudioBookDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: AudioBookEntity): Long
 
-    @Query("UPDATE audio_books SET audioPath = :path, status = :status, durationMs = :duration WHERE id = :id")
+    @Query("""
+        UPDATE audio_books 
+        SET audioPath = :path, status = :status, durationMs = :duration 
+        WHERE id = :id
+    """)
     suspend fun updateAudio(id: Long, path: String?, status: String, duration: Long)
+
+    @Query("""
+        UPDATE audio_books 
+        SET lastPositionMs = :positionMs, lastPlayedAt = :now 
+        WHERE id = :id
+    """)
+    suspend fun updatePlayback(id: Long, positionMs: Long, now: Long)
 
     @Delete
     suspend fun delete(entity: AudioBookEntity)
+
+    @Query("SELECT * FROM audio_books WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<AudioBookEntity?>
 }

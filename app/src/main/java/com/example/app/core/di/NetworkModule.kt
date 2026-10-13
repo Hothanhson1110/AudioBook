@@ -1,5 +1,6 @@
 package com.example.app.core.di
 
+import com.example.app.BuildConfig
 import com.example.app.data.remote.ApiService
 import dagger.Module
 import dagger.Provides
@@ -15,15 +16,23 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     fun provideOkHttp(): OkHttpClient =
         OkHttpClient.Builder()
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            })
+            .addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = if (BuildConfig.DEBUG) {
+                        HttpLoggingInterceptor.Level.BASIC
+                    } else {
+                        HttpLoggingInterceptor.Level.NONE
+                    }
+                }
+            )
             .build()
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     fun provideRetrofit(client: OkHttpClient): Retrofit =
         Retrofit.Builder()
             .baseUrl("https://api.example.com/")
@@ -31,7 +40,8 @@ object NetworkModule {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     fun provideApi(retrofit: Retrofit): ApiService =
         retrofit.create(ApiService::class.java)
 }

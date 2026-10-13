@@ -1,4 +1,3 @@
-// LibraryUiState.kt
 package com.example.app.presentation.screens.library
 
 import com.example.app.domain.model.AudioBook

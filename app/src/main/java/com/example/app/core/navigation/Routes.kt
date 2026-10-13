@@ -4,6 +4,6 @@ import kotlinx.serialization.Serializable
 
 sealed interface Route {
     @Serializable data object Home : Route
-    @Serializable data class Reader(val bookId: Long) : Route
+    @Serializable data class Player(val bookId: Long) : Route
     @Serializable data object Library : Route
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.app.data.local.AudioBookDatabase
 import com.example.app.data.local.dao.AudioBookDao
+import com.example.app.data.local.dao.ChapterDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,12 +16,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AudioBookDatabase =
         Room.databaseBuilder(ctx, AudioBookDatabase::class.java, "audiobook.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(*AudioBookDatabase.ALL_MIGRATIONS)
             .build()
 
     @Provides
-    fun provideDao(db: AudioBookDatabase): AudioBookDao = db.audioBookDao()
+    fun provideAudioBookDao(db: AudioBookDatabase): AudioBookDao = db.audioBookDao()
+
+    @Provides
+    fun provideChapterDao(db: AudioBookDatabase): ChapterDao = db.chapterDao()
 }
