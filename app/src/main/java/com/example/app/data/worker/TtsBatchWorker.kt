@@ -18,10 +18,6 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/**
- * Worker xử lý MỘT BATCH gồm nhiều chunk tuần tự.
- * Giảm số worker từ 468 → 4 (hoặc 8) → tránh overwhelm JobScheduler.
- */
 @HiltWorker
 class TtsBatchWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -31,37 +27,61 @@ class TtsBatchWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val bookId = inputData.getLong(KEY_BOOK_ID, -1L)
         val batchIndex = inputData.getInt(KEY_BATCH_INDEX, -1)
-        val texts = inputData.getStringArray(KEY_TEXTS) ?: return@withContext Result.failure()
         val startIndex = inputData.getInt(KEY_START_INDEX, -1)
+        val endIndex = inputData.getInt(KEY_END_INDEX, -1)
         val voiceName = inputData.getString(KEY_VOICE) ?: ""
         val localeTag = inputData.getString(KEY_LOCALE) ?: "vi-VN"
         val pitch = inputData.getFloat(KEY_PITCH, 1f)
         val rate = inputData.getFloat(KEY_RATE, 1f)
 
-        if (bookId <= 0L || batchIndex < 0 || texts.isEmpty()) {
+        if (bookId <= 0L || batchIndex < 0 || startIndex < 0 || endIndex <= startIndex) {
             return@withContext Result.failure()
         }
 
         WorkerLogger.log(
             applicationContext, "TtsBatch#$batchIndex",
-            "start: ${texts.size} chunks (idx $startIndex..${startIndex + texts.size - 1})"
+            "start: idx $startIndex..${endIndex - 1}"
         )
 
+        // Đọc chunks từ file
+        val chunksFile = File(applicationContext.filesDir, "audio/book_$bookId.chunks.txt")
+        if (!chunksFile.exists()) {
+            WorkerLogger.log(
+                applicationContext, "TtsBatch#$batchIndex",
+                "FAIL: chunks file not found: ${chunksFile.absolutePath}"
+            )
+            return@withContext Result.failure(
+                workDataOf(KEY_ERROR to "chunks file missing")
+            )
+        }
+
+        val allChunks = try {
+            chunksFile.readLines()
+        } catch (t: Throwable) {
+            WorkerLogger.logError(applicationContext, "TtsBatch#$batchIndex", t)
+            return@withContext Result.failure()
+        }
+
+        if (startIndex >= allChunks.size) {
+            WorkerLogger.log(
+                applicationContext, "TtsBatch#$batchIndex",
+                "skip: startIndex ${startIndex} >= total ${allChunks.size}"
+            )
+            return@withContext Result.success()
+        }
+
+        val myChunks = allChunks.subList(startIndex, minOf(endIndex, allChunks.size))
         val outDir = File(applicationContext.filesDir, "audio/book_$bookId").apply { mkdirs() }
 
         try {
             var tts = initTts(voiceName, localeTag, pitch, rate)
 
             try {
-                texts.forEachIndexed { i, text ->
+                myChunks.forEachIndexed { i, text ->
                     val actualIndex = startIndex + i
                     val outFile = File(outDir, "chunk_%05d.wav".format(actualIndex))
 
                     if (outFile.exists() && outFile.length() > 0) {
-                        WorkerLogger.log(
-                            applicationContext, "TtsBatch#$batchIndex",
-                            "skip #$actualIndex (đã có)"
-                        )
                         return@forEachIndexed
                     }
 
@@ -81,7 +101,7 @@ class TtsBatchWorker @AssistedInject constructor(
 
             WorkerLogger.log(
                 applicationContext, "TtsBatch#$batchIndex",
-                "DONE ${texts.size} chunks"
+                "DONE ${myChunks.size} chunks"
             )
             Result.success()
         } catch (t: Throwable) {
@@ -152,7 +172,7 @@ class TtsBatchWorker @AssistedInject constructor(
                     cont.resume(Unit)
                 }
             }
-            @Deprecated("Deprecated")
+            @Deprecated("Deprecated in Java")
             override fun onError(id: String?) {
                 if (!done && cont.isActive) {
                     done = true
@@ -180,7 +200,7 @@ class TtsBatchWorker @AssistedInject constructor(
         const val KEY_BOOK_ID = "book_id"
         const val KEY_BATCH_INDEX = "batch_index"
         const val KEY_START_INDEX = "start_index"
-        const val KEY_TEXTS = "texts"
+        const val KEY_END_INDEX = "end_index"
         const val KEY_VOICE = "voice"
         const val KEY_LOCALE = "locale"
         const val KEY_PITCH = "pitch"
