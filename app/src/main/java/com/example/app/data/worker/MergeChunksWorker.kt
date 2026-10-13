@@ -23,31 +23,28 @@ class MergeChunksWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val bookId = inputData.getLong(KEY_BOOK_ID, -1L)
-        val chunkPaths = inputData.getStringArray(KEY_CHUNKS)?.toList()
-            ?: return@withContext Result.failure()
-
-        if (bookId <= 0L || chunkPaths.isEmpty()) {
-            return@withContext Result.failure()
-        }
+        if (bookId <= 0L) return@withContext Result.failure()
 
         val chunkDir = File(applicationContext.filesDir, "audio/book_$bookId")
-        val actualChunks = if (chunkPaths.isNotEmpty()) {
-            chunkPaths.map(::File)
-        } else {
-            chunkDir.listFiles { f -> f.name.startsWith("chunk_") }
-                ?.sortedBy { it.name }
-                ?: emptyList()
+
+        // Đọc chunk files từ thư mục — không phụ thuộc vào KEY_CHUNKS
+        val actualChunks = chunkDir
+            .listFiles { f -> f.name.startsWith("chunk_") && f.extension == "wav" }
+            ?.sortedBy { it.name }
+            .orEmpty()
+
+        if (actualChunks.isEmpty()) {
+            dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
+            return@withContext Result.failure(
+                workDataOf(KEY_ERROR to "No chunk files found in $chunkDir")
+            )
         }
 
-        try {
-            require(actualChunks.isNotEmpty() && actualChunks.all { it.exists() }) {
-                "Missing chunk files"
-            }
-
+        return@withContext try {
             val outDir = File(applicationContext.filesDir, "audio").apply { mkdirs() }
             val m4a = File(outDir, "book_$bookId.m4a")
 
-            WavToAacEncoder.encode(actualChunks.sortedBy { it.name }, m4a)
+            WavToAacEncoder.encode(actualChunks, m4a)
             chunkDir.deleteRecursively()
 
             val durationMs = readDurationMs(m4a)

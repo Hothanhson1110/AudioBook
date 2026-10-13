@@ -16,6 +16,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.example.app.core.WorkerLogger
 
 @HiltWorker
 class TtsChunkWorker @AssistedInject constructor(
@@ -27,6 +28,9 @@ class TtsChunkWorker @AssistedInject constructor(
         val bookId = inputData.getLong(KEY_BOOK_ID, -1L)
         val index = inputData.getInt(KEY_INDEX, -1)
         val text = inputData.getString(KEY_TEXT) ?: return@withContext Result.failure()
+
+        WorkerLogger.log(applicationContext, "Tts#$index", "start: ${text.length} chars")
+
         val voiceName = inputData.getString(KEY_VOICE) ?: ""
         val localeTag = inputData.getString(KEY_LOCALE) ?: "vi-VN"
         val pitch = inputData.getFloat(KEY_PITCH, 1f)
@@ -48,8 +52,10 @@ class TtsChunkWorker @AssistedInject constructor(
                 rate = rate,
                 outFile = outFile,
             )
+            WorkerLogger.log(applicationContext, "Tts#$index", "done: ${outFile.absolutePath}")
             Result.success(workDataOf(KEY_OUTPUT to outFile.absolutePath))
         } catch (t: Throwable) {
+            WorkerLogger.logError(applicationContext, "Tts#$index", t)
             if (runAttemptCount < MAX_RETRY) Result.retry()
             else Result.failure(workDataOf(KEY_ERROR to (t.message ?: "unknown")))
         }
