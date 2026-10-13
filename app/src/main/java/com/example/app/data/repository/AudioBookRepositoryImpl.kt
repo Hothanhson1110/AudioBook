@@ -19,6 +19,7 @@ import com.example.app.domain.service.ImportProgress
 import com.example.app.domain.service.VoiceProfile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
@@ -40,14 +41,21 @@ class AudioBookRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : AudioBookRepository {
 
-    // Lazy — chỉ gọi WorkManager.getInstance khi thực sự cần
     private val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
+
+    // -------------------------------------------------------------------------
+    // Books
+    // -------------------------------------------------------------------------
 
     override fun observeBooks(): Flow<List<AudioBook>> =
         dao.observeAll().map { list -> list.map(mapper::toDomain) }
 
     override suspend fun getBook(id: Long): AudioBook? =
         dao.getById(id)?.let(mapper::toDomain)
+
+    // -------------------------------------------------------------------------
+    // Import
+    // -------------------------------------------------------------------------
 
     override fun importDocument(uriString: String, title: String): Flow<ImportProgress> = flow {
         try {
@@ -69,6 +77,10 @@ class AudioBookRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    // -------------------------------------------------------------------------
+    // Synthesis
+    // -------------------------------------------------------------------------
+
     override suspend fun synthesize(bookId: Long, profile: VoiceProfile) {
         val entity = dao.getById(bookId) ?: error("Book not found: $bookId")
         dao.upsert(
@@ -82,49 +94,121 @@ class AudioBookRepositoryImpl @Inject constructor(
         orchestrator.enqueue(bookId, entity.sourceUri, profile)
     }
 
-    override fun observeSynthesisState(bookId: Long): Flow<SynthesisState> =
-        workManager
-            .getWorkInfosByTagFlow("synth_book_$bookId")
-            .map { infos ->
-                if (infos.isEmpty()) return@map SynthesisState.Idle
+    override fun observeSynthesisState(bookId: Long): Flow<SynthesisState> = flow {
+        val chunksFile = File(context.filesDir, "audio/book_$bookId.chunks.txt")
+        val chunkDir = File(context.filesDir, "audio/book_$bookId")
 
-                val anyFailed = infos.any { it.state == WorkInfo.State.FAILED }
-                if (anyFailed) return@map SynthesisState.Failed("Synthesis failed")
-
-                val allSucceeded = infos.all { it.state == WorkInfo.State.SUCCEEDED }
-                if (allSucceeded) return@map SynthesisState.Completed
-
-                val running = infos.count { it.state == WorkInfo.State.RUNNING }
-                val total = infos.size
-                val percent = if (total > 0) (running * 100) / total else 0
-                SynthesisState.Running(percent.coerceIn(0, 99))
+        while (true) {
+            val infos: List<WorkInfo> = try {
+                workManager.getWorkInfosByTag("synth_book_$bookId").get()
+            } catch (_: Throwable) {
+                emptyList()
             }
-            .catch { emit(SynthesisState.Idle) }
-            .flowOn(Dispatchers.Default)
+
+            val totalChunks: Int = try {
+                if (chunksFile.exists()) chunksFile.readLines().size else 0
+            } catch (_: Throwable) {
+                0
+            }
+
+            val doneChunks: Int = chunkDir
+                .listFiles { f -> f.name.startsWith("chunk_") && f.extension == "wav" }
+                ?.size ?: 0
+
+            val state: SynthesisState = when {
+                infos.isEmpty() -> SynthesisState.Idle
+
+                infos.any { it.state == WorkInfo.State.FAILED } ->
+                    SynthesisState.Failed("Synthesis failed")
+
+                infos.all { it.state == WorkInfo.State.SUCCEEDED } ->
+                    SynthesisState.Completed
+
+                else -> {
+                    val percent = if (totalChunks > 0) {
+                        (doneChunks * 100) / totalChunks
+                    } else 0
+                    SynthesisState.Running(
+                        progressPercent = percent.coerceIn(0, 99),
+                        totalChunks = totalChunks,
+                    )
+                }
+            }
+
+            emit(state)
+
+            if (state is SynthesisState.Completed || state is SynthesisState.Failed) {
+                break
+            }
+            delay(1_000L)
+        }
+    }
+        .catch { emit(SynthesisState.Idle) }
+        .flowOn(Dispatchers.IO)
 
     override suspend fun cancelSynthesis(bookId: Long) =
         withContext(Dispatchers.IO) { orchestrator.cancel(bookId) }
 
+    override suspend fun getAvailableChunks(bookId: Long): List<File> =
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, "audio/book_$bookId")
+                .listFiles { f -> f.name.startsWith("chunk_") && f.extension == "wav" }
+                ?.sortedBy { it.name }
+                ?: emptyList()
+        }
+
+    // -------------------------------------------------------------------------
+    // Delete
+    // -------------------------------------------------------------------------
+
     override suspend fun deleteBook(id: Long) = withContext(Dispatchers.IO) {
         val entity = dao.getById(id) ?: return@withContext
+
+        // Xoá file output (.m4a)
         entity.audioPath?.let { path ->
             runCatching { File(path).takeIf(File::exists)?.delete() }
         }
-        val chunkDir = File(context.filesDir, "audio/book_$id")
-        if (chunkDir.exists()) chunkDir.deleteRecursively()
+
+        // Xoá chunkDir + file .chunks.txt
+        runCatching {
+            File(context.filesDir, "audio/book_$id").deleteRecursively()
+        }
+        runCatching {
+            File(context.filesDir, "audio/book_$id.m4a").delete()
+        }
+        runCatching {
+            File(context.filesDir, "audio/book_$id.chunks.txt").delete()
+        }
+
+        // Cancel workers đang chạy (nếu có)
+        runCatching { orchestrator.cancel(id) }
+
+        // Xoá khỏi DB
         chapterDao.deleteByBook(id)
         dao.delete(entity)
     }
+
+    // -------------------------------------------------------------------------
+    // Playback state
+    // -------------------------------------------------------------------------
 
     override suspend fun updatePlayback(bookId: Long, positionMs: Long) =
         withContext(Dispatchers.IO) {
             dao.updatePlayback(bookId, positionMs, System.currentTimeMillis())
         }
 
+    // -------------------------------------------------------------------------
+    // Chapters
+    // -------------------------------------------------------------------------
+
     override suspend fun getChapters(bookId: Long): List<Chapter> =
         withContext(Dispatchers.IO) {
             chapterDao.getByBook(bookId).map(mapper::toDomain)
         }
+
+    // -------------------------------------------------------------------------
+    // Remote sync
+    // -------------------------------------------------------------------------
 
     override suspend fun syncFromRemote(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
