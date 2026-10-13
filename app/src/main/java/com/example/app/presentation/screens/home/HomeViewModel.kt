@@ -38,7 +38,7 @@ class HomeViewModel @Inject constructor(
     private val _stats = MutableStateFlow(HomeStats())
     val stats = _stats.asStateFlow()
 
-    private val _synthesis = MutableStateFlow<Map<Long, SynthesisState>>(emptyMap())
+    private val _synthesis = MutableStateFlow<Map<Long, SynthesisProgress>>(emptyMap())
     val synthesis = _synthesis.asStateFlow()
 
     private val _events = Channel<HomeEvent>(Channel.BUFFERED)
@@ -71,9 +71,6 @@ class HomeViewModel @Inject constructor(
                 when (progress) {
                     is ImportProgress.Completed -> {
                         _events.send(HomeEvent.Imported(progress.bookId))
-                        // Auto navigate sang Player
-                        _events.send(HomeEvent.NavigateToPlayer(progress.bookId))
-                        // Bắt đầu synthesis luôn
                         onSynthesize(progress.bookId, VoicePresets.VIETNAMESE.first())
                     }
                     is ImportProgress.Failed ->
@@ -87,12 +84,26 @@ class HomeViewModel @Inject constructor(
         if (synthesisJobs[bookId]?.isActive == true) return
 
         synthesisJobs[bookId] = viewModelScope.launch {
-            _synthesis.value = _synthesis.value + (bookId to SynthesisState.Running(0))
+            _synthesis.value = _synthesis.value + (
+                bookId to SynthesisProgress(0, 0, 0, false)
+            )
 
             synthesizeBook.observeState(bookId)
                 .onEach { state ->
-                    _synthesis.value = _synthesis.value + (bookId to state)
                     when (state) {
+                        is SynthesisState.Running -> {
+                            val percent = state.progressPercent
+                            val total = state.totalChunks
+                            val done = (percent * total) / 100
+                            _synthesis.value = _synthesis.value + (
+                                bookId to SynthesisProgress(
+                                    doneChunks = done,
+                                    totalChunks = total,
+                                    percent = percent,
+                                    canPreview = percent >= 25 && done > 0,
+                                )
+                            )
+                        }
                         is SynthesisState.Completed -> {
                             _synthesis.value = _synthesis.value - bookId
                             synthesisJobs.remove(bookId)
