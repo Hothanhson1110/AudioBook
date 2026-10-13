@@ -11,4 +11,12 @@ sealed interface HomeUiState {
 sealed interface HomeEvent {
     data class Message(val text: String) : HomeEvent
     data class Imported(val bookId: Long) : HomeEvent
+    data class NavigateToPlayer(val bookId: Long) : HomeEvent
 }
+
+data class HomeStats(
+    val total: Int = 0,
+    val ready: Int = 0,
+    val processing: Int = 0,
+    val failed: Int = 0,
+)
