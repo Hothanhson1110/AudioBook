@@ -112,7 +112,7 @@ fun HomeScreen(
             when (event) {
                 is HomeEvent.Message -> snackbarHostState.showSnackbar(event.text)
                 is HomeEvent.Imported ->
-                    snackbarHostState.showSnackbar("Đã thêm sách vào thư viện")
+                    snackbarHostState.showSnackbar("Da them sach")
                 is HomeEvent.NavigateToPlayer -> onOpenPlayer(event.bookId)
             }
         }
@@ -138,7 +138,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onBackground,
                             )
                             Text(
-                                "Thư viện của bạn",
+                                "Thu vien cua ban",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted,
                             )
@@ -150,7 +150,7 @@ fun HomeScreen(
                         IconButton(onClick = viewModel::onDeleteAllFailed) {
                             Icon(
                                 Icons.Default.DeleteSweep,
-                                contentDescription = "Xoá tất cả lỗi",
+                                contentDescription = "Delete failed",
                                 tint = StatusFailed,
                             )
                         }
@@ -164,7 +164,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Thêm sách",
+                            contentDescription = "Add book",
                             tint = Color.Black,
                         )
                     }
@@ -258,7 +258,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Đã sẵn sàng: ${stats.ready} sách",
+                        "Da san sang: ${stats.ready} sach",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
@@ -276,10 +276,10 @@ private fun StatsRow(stats: HomeStats) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatChip("Tổng", stats.total, NeonPurple, Modifier.weight(1f))
-        StatChip("Sẵn sàng", stats.ready, NeonGreen, Modifier.weight(1f))
-        StatChip("Đang xử lý", stats.processing, NeonCyan, Modifier.weight(1f))
-        StatChip("Lỗi", stats.failed, StatusFailed, Modifier.weight(1f))
+        StatChip("Tong", stats.total, NeonPurple, Modifier.weight(1f))
+        StatChip("San sang", stats.ready, NeonGreen, Modifier.weight(1f))
+        StatChip("Dang xu ly", stats.processing, NeonCyan, Modifier.weight(1f))
+        StatChip("Loi", stats.failed, StatusFailed, Modifier.weight(1f))
     }
 }
 
@@ -381,7 +381,7 @@ private fun NeonBookCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
-                            "Nghe được",
+                            "Preview",
                             style = MaterialTheme.typography.labelSmall,
                             color = NeonCyan,
                             fontWeight = FontWeight.Bold,
@@ -414,7 +414,7 @@ private fun NeonBookCard(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Đang xử lý ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
+                    "Processing ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
                     style = MaterialTheme.typography.labelSmall,
                     color = NeonCyan,
                 )
@@ -422,7 +422,6 @@ private fun NeonBookCard(
 
             Spacer(Modifier.height(12.dp))
 
-            // NÚT "NGHE NGAY" / "NGHE TRƯỚC" full-width
             if (isReady || (isProcessing && canPreview)) {
                 Button(
                     onClick = onPlay,
@@ -443,7 +442,7 @@ private fun NeonBookCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (isReady) "Nghe ngay" else "Nghe trước",
+                        if (isReady) "Listen now" else "Listen preview",
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -461,7 +460,7 @@ private fun NeonBookCard(
                 ) {
                     Icon(
                         Icons.Default.GraphicEq,
-                        contentDescription = "Tạo audio",
+                        contentDescription = "Generate audio",
                         tint = if (!isProcessing && !isReady && !isFailed)
                             NeonPurple else TextMuted,
                     )
@@ -469,18 +468,18 @@ private fun NeonBookCard(
 
                 when {
                     isProcessing -> IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.Cancel, "Huỷ", tint = StatusFailed)
+                        Icon(Icons.Default.Cancel, "Cancel", tint = StatusFailed)
                     }
                     isFailed -> {
                         IconButton(onClick = onSynthesize) {
-                            Icon(Icons.Default.Refresh, "Thử lại", tint = NeonYellow)
+                            Icon(Icons.Default.Refresh, "Retry", tint = NeonYellow)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, "Xoá", tint = StatusFailed)
+                            Icon(Icons.Default.Delete, "Delete", tint = StatusFailed)
                         }
                     }
                     else -> IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, "Xoá", tint = TextSecondary)
+                        Icon(Icons.Default.Delete, "Delete", tint = TextSecondary)
                     }
                 }
             }
@@ -503,5 +502,15 @@ private fun EmptyState() {
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            "Chưa có sách nào",
-            style = MaterialTheme.typography.tit
+            "No books yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = TextSecondary,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Tap + at top right to add",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+        )
+    }
+}
