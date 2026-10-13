@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -168,7 +169,12 @@ private fun BookCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onSynthesize) {
+                val isProcessing = book.status == BookStatus.PROCESSING
+
+                IconButton(
+                    onClick = onSynthesize,
+                    enabled = !isProcessing && book.status != BookStatus.READY,
+                ) {
                     Icon(Icons.Default.GraphicEq, contentDescription = "Tao audio")
                 }
                 IconButton(
@@ -177,8 +183,13 @@ private fun BookCard(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Nghe")
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Xoa")
+                IconButton(
+                    onClick = if (isProcessing) onCancel else onDelete,
+                ) {
+                    Icon(
+                        if (isProcessing) Icons.Default.Close else Icons.Default.Delete,
+                        contentDescription = if (isProcessing) "Huy" else "Xoa",
+                    )
                 }
             }
         }

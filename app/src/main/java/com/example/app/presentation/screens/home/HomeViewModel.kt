@@ -69,7 +69,13 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onSynthesize(bookId: Long, profile: VoiceProfile) {
+        // Nếu đang có synthesis job active → bỏ qua
         if (synthesisJobs[bookId]?.isActive == true) return
+
+        // Nếu book đang PROCESSING → bỏ qua (tránh double-trigger)
+        val currentBook = (_uiState.value as? HomeUiState.Success)
+            ?.books?.firstOrNull { it.id == bookId }
+        if (currentBook?.status == com.example.app.domain.model.BookStatus.PROCESSING) return
 
         synthesisJobs[bookId] = viewModelScope.launch {
             _synthesis.value = _synthesis.value + (bookId to SynthesisState.Running(0))
@@ -98,6 +104,9 @@ class HomeViewModel @Inject constructor(
                     synthesisJobs.remove(bookId)
                     _events.send(HomeEvent.Message(t.message ?: "Synthesis failed"))
                 }
+
+            // QUAN TRỌNG: job kết thúc ngay sau khi enqueue, nhưng ta vẫn cần giữ
+            // state job active cho đến khi observeState emit Completed/Failed
         }
     }
 

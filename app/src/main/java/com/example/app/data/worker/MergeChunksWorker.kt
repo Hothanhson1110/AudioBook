@@ -13,6 +13,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.example.app.core.WorkerLogger
 
 @HiltWorker
 class MergeChunksWorker @AssistedInject constructor(
@@ -23,39 +24,40 @@ class MergeChunksWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val bookId = inputData.getLong(KEY_BOOK_ID, -1L)
+        WorkerLogger.log(applicationContext, "Merge", "=== START book $bookId ===")
+
         if (bookId <= 0L) return@withContext Result.failure()
 
         val chunkDir = File(applicationContext.filesDir, "audio/book_$bookId")
-
-        // Đọc chunk files từ thư mục — không phụ thuộc vào KEY_CHUNKS
         val actualChunks = chunkDir
             .listFiles { f -> f.name.startsWith("chunk_") && f.extension == "wav" }
             ?.sortedBy { it.name }
             .orEmpty()
 
+        WorkerLogger.log(applicationContext, "Merge", "found ${actualChunks.size} chunks")
+
         if (actualChunks.isEmpty()) {
+            WorkerLogger.log(applicationContext, "Merge", "FAIL: no chunks")
             dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
-            return@withContext Result.failure(
-                workDataOf(KEY_ERROR to "No chunk files found in $chunkDir")
-            )
+            return@withContext Result.failure(workDataOf(KEY_ERROR to "No chunks"))
         }
 
         return@withContext try {
             val outDir = File(applicationContext.filesDir, "audio").apply { mkdirs() }
             val m4a = File(outDir, "book_$bookId.m4a")
 
+            WorkerLogger.log(applicationContext, "Merge", "encoding to ${m4a.absolutePath}")
             WavToAacEncoder.encode(actualChunks, m4a)
+            WorkerLogger.log(applicationContext, "Merge", "encoded OK, size=${m4a.length()}")
+
             chunkDir.deleteRecursively()
 
             val durationMs = readDurationMs(m4a)
-            dao.updateAudio(
-                id = bookId,
-                path = m4a.absolutePath,
-                status = BookStatus.READY.name,
-                duration = durationMs,
-            )
+            dao.updateAudio(bookId, m4a.absolutePath, BookStatus.READY.name, durationMs)
+            WorkerLogger.log(applicationContext, "Merge", "DONE duration=$durationMs")
             Result.success(workDataOf(KEY_OUTPUT to m4a.absolutePath))
         } catch (t: Throwable) {
+            WorkerLogger.logError(applicationContext, "Merge", t)
             dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
             Result.failure(workDataOf(KEY_ERROR to (t.message ?: "unknown")))
         }

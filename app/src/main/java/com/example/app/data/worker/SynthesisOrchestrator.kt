@@ -2,6 +2,7 @@ package com.example.app.data.worker
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -32,7 +33,12 @@ class SynthesisOrchestrator @Inject constructor(
         profile: VoiceProfile,
     ) = withContext(Dispatchers.IO) {
         WorkerLogger.log(context, "Orchestrator", "=== START book $bookId ===")
-        WorkerLogger.log(context, "Orchestrator", "uri=$sourceUri profile=${profile.id}")
+
+        // Cancel workers cũ trước khi enqueue mới
+        workManager.cancelAllWorkByTag(tag(bookId))
+
+        // Xoá chunk cũ nếu còn sót
+        java.io.File(context.filesDir, "audio/book_$bookId").deleteRecursively()
 
         dao.updateAudio(bookId, null, BookStatus.PROCESSING.name, 0L)
 
@@ -40,7 +46,6 @@ class SynthesisOrchestrator @Inject constructor(
             val ext = sourceUri.substringAfterLast('.', "").lowercase()
             val parser = parserFactory.parserFor(ext) ?: error("Unsupported: .$ext")
 
-            WorkerLogger.log(context, "Orchestrator", "parsing...")
             val fullText = buildString {
                 parser.parse(sourceUri).collect { appendLine(it) }
             }
@@ -63,11 +68,6 @@ class SynthesisOrchestrator @Inject constructor(
                             TtsChunkWorker.KEY_RATE to profile.speechRate,
                         )
                     )
-                    .setConstraints(
-                        Constraints.Builder()
-                            .setRequiresBatteryNotLow(false)
-                            .build()
-                    )
                     .addTag(tag(bookId))
                     .build()
             }
@@ -78,7 +78,11 @@ class SynthesisOrchestrator @Inject constructor(
                 .build()
 
             workManager
-                .beginWith(chunkRequests)
+                .beginUniqueWork(
+                    tag(bookId),
+                    ExistingWorkPolicy.REPLACE,   // ← REPLACE nếu đã có
+                    chunkRequests,
+                )
                 .then(mergeRequest)
                 .enqueue()
 
