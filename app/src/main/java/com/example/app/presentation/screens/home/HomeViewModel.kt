@@ -59,14 +59,27 @@ class HomeViewModel @Inject constructor(
                     processing = books.count { it.status == BookStatus.PROCESSING },
                     failed = books.count { it.status == BookStatus.FAILED },
                 )
+
+                // Recovery: sach keo PROCESSING nhung khong co worker dang chay
+                viewModelScope.launch {
+                    books.filter { it.status == BookStatus.PROCESSING }
+                        .forEach { book ->
+                            val hasJob = synthesisJobs[book.id]?.isActive == true
+                            if (!hasJob) {
+                                val stillRunning = runCatching {
+                                    synthesizeBook.isRunning(book.id)
+                                }.getOrDefault(false)
+
+                                if (!stillRunning) {
+                                    runCatching { synthesizeBook.markFailed(book.id) }
+                                }
+                            }
+                        }
+                }
             }
             .catch { t -> _uiState.value = HomeUiState.Error(t.message ?: "Load failed") }
             .launchIn(viewModelScope)
     }
-
-    // -------------------------------------------------------------------------
-    // Import
-    // -------------------------------------------------------------------------
 
     fun onFilePicked(uri: Uri, displayName: String? = null) {
         val title = displayName
@@ -78,7 +91,7 @@ class HomeViewModel @Inject constructor(
                 when (progress) {
                     is ImportProgress.Completed -> {
                         _events.send(HomeEvent.Imported(progress.bookId))
-                        // Tu dong bat dau synthesize voi cai dat giong doc hien tai
+                        // Tu dong synthesize voi cai dat giong doc hien tai
                         val settings = getVoiceSettings().first()
                         val profile = VoiceComposer.compose(settings)
                         onSynthesize(progress.bookId, profile)
@@ -89,10 +102,6 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Synthesis
-    // -------------------------------------------------------------------------
 
     fun onSynthesize(bookId: Long, profile: VoiceProfile) {
         if (synthesisJobs[bookId]?.isActive == true) return
@@ -165,19 +174,33 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Delete
-    // -------------------------------------------------------------------------
-
     fun onDelete(bookId: Long) {
-        viewModelScope.launch { deleteBook(bookId) }
+        viewModelScope.launch {
+            // 1. Cancel synthesis job local
+            synthesisJobs.remove(bookId)?.cancel()
+            _synthesis.value = _synthesis.value - bookId
+
+            // 2. Cancel workers
+            runCatching { synthesizeBook.cancel(bookId) }
+
+            // 3. Xoa sach khoi DB + storage
+            runCatching { deleteBook(bookId) }
+                .onFailure { t ->
+                    _events.send(HomeEvent.Message("Xoa that bai: ${t.message}"))
+                }
+        }
     }
 
     fun onDeleteAllFailed() {
         val current = (_uiState.value as? HomeUiState.Success)?.books ?: return
         viewModelScope.launch {
             current.filter { it.status == BookStatus.FAILED }
-                .forEach { deleteBook(it.id) }
+                .forEach { book ->
+                    synthesisJobs.remove(book.id)?.cancel()
+                    _synthesis.value = _synthesis.value - book.id
+                    runCatching { synthesizeBook.cancel(book.id) }
+                    runCatching { deleteBook(book.id) }
+                }
             _events.send(HomeEvent.Message("Da xoa cac sach loi"))
         }
     }
