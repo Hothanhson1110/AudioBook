@@ -43,9 +43,9 @@ class AudioBookRepositoryImpl @Inject constructor(
 
     private val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Books
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override fun observeBooks(): Flow<List<AudioBook>> =
         dao.observeAll().map { list -> list.map(mapper::toDomain) }
@@ -53,9 +53,9 @@ class AudioBookRepositoryImpl @Inject constructor(
     override suspend fun getBook(id: Long): AudioBook? =
         dao.getById(id)?.let(mapper::toDomain)
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Import
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override fun importDocument(uriString: String, title: String): Flow<ImportProgress> = flow {
         try {
@@ -77,9 +77,9 @@ class AudioBookRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Synthesis
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override suspend fun synthesize(bookId: Long, profile: VoiceProfile) {
         val entity = dao.getById(bookId) ?: error("Book not found: $bookId")
@@ -146,8 +146,42 @@ class AudioBookRepositoryImpl @Inject constructor(
         .catch { emit(SynthesisState.Idle) }
         .flowOn(Dispatchers.IO)
 
-    override suspend fun cancelSynthesis(bookId: Long) =
-        withContext(Dispatchers.IO) { orchestrator.cancel(bookId) }
+    override suspend fun cancelSynthesis(bookId: Long) = withContext(Dispatchers.IO) {
+        orchestrator.cancel(bookId)
+
+        // Reset status ve IMPORTED de user co the retry
+        val book = dao.getById(bookId)
+        if (book?.status == BookStatus.PROCESSING.name) {
+            dao.updateAudio(bookId, null, BookStatus.IMPORTED.name, 0L)
+        }
+
+        // Xoa chunks dang do
+        runCatching {
+            File(context.filesDir, "audio/book_$bookId").deleteRecursively()
+            File(context.filesDir, "audio/book_$bookId.chunks.txt").delete()
+        }
+    }
+
+    override suspend fun isSynthesisRunning(bookId: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val infos = workManager.getWorkInfosByTag("synth_book_$bookId").get()
+                infos.any {
+                    it.state == WorkInfo.State.RUNNING ||
+                        it.state == WorkInfo.State.ENQUEUED ||
+                        it.state == WorkInfo.State.BLOCKED
+                }
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
+    override suspend fun markAsFailed(bookId: Long) = withContext(Dispatchers.IO) {
+        val book = dao.getById(bookId)
+        if (book?.status == BookStatus.PROCESSING.name) {
+            dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
+        }
+    }
 
     override suspend fun getAvailableChunks(bookId: Long): List<File> =
         withContext(Dispatchers.IO) {
@@ -157,19 +191,22 @@ class AudioBookRepositoryImpl @Inject constructor(
                 ?: emptyList()
         }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Delete
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override suspend fun deleteBook(id: Long) = withContext(Dispatchers.IO) {
         val entity = dao.getById(id) ?: return@withContext
 
-        // Xoá file output (.m4a)
+        // Cancel workers dang chay
+        runCatching { orchestrator.cancel(id) }
+
+        // Xoa file output
         entity.audioPath?.let { path ->
             runCatching { File(path).takeIf(File::exists)?.delete() }
         }
 
-        // Xoá chunkDir + file .chunks.txt
+        // Xoa chunk dir + files
         runCatching {
             File(context.filesDir, "audio/book_$id").deleteRecursively()
         }
@@ -180,35 +217,32 @@ class AudioBookRepositoryImpl @Inject constructor(
             File(context.filesDir, "audio/book_$id.chunks.txt").delete()
         }
 
-        // Cancel workers đang chạy (nếu có)
-        runCatching { orchestrator.cancel(id) }
-
-        // Xoá khỏi DB
+        // Xoa khoi DB
         chapterDao.deleteByBook(id)
         dao.delete(entity)
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Playback state
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override suspend fun updatePlayback(bookId: Long, positionMs: Long) =
         withContext(Dispatchers.IO) {
             dao.updatePlayback(bookId, positionMs, System.currentTimeMillis())
         }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Chapters
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override suspend fun getChapters(bookId: Long): List<Chapter> =
         withContext(Dispatchers.IO) {
             chapterDao.getByBook(bookId).map(mapper::toDomain)
         }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Remote sync
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     override suspend fun syncFromRemote(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
