@@ -146,19 +146,21 @@ class AudioBookRepositoryImpl @Inject constructor(
         .catch { emit(SynthesisState.Idle) }
         .flowOn(Dispatchers.IO)
 
-    override suspend fun cancelSynthesis(bookId: Long) = withContext(Dispatchers.IO) {
-        orchestrator.cancel(bookId)
+    override suspend fun cancelSynthesis(bookId: Long) {
+        withContext(Dispatchers.IO) {
+            orchestrator.cancel(bookId)
 
-        // Reset status ve IMPORTED de user co the retry
-        val book = dao.getById(bookId)
-        if (book?.status == BookStatus.PROCESSING.name) {
-            dao.updateAudio(bookId, null, BookStatus.IMPORTED.name, 0L)
-        }
+            // Reset status ve IMPORTED de user co the retry
+            val book = dao.getById(bookId)
+            if (book?.status == BookStatus.PROCESSING.name) {
+                dao.updateAudio(bookId, null, BookStatus.IMPORTED.name, 0L)
+            }
 
-        // Xoa chunks dang do
-        runCatching {
-            File(context.filesDir, "audio/book_$bookId").deleteRecursively()
-            File(context.filesDir, "audio/book_$bookId.chunks.txt").delete()
+            // Xoa chunks dang do
+            runCatching {
+                File(context.filesDir, "audio/book_$bookId").deleteRecursively()
+                File(context.filesDir, "audio/book_$bookId.chunks.txt").delete()
+            }
         }
     }
 
@@ -176,10 +178,12 @@ class AudioBookRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun markAsFailed(bookId: Long) = withContext(Dispatchers.IO) {
-        val book = dao.getById(bookId)
-        if (book?.status == BookStatus.PROCESSING.name) {
-            dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
+    override suspend fun markAsFailed(bookId: Long) {
+        withContext(Dispatchers.IO) {
+            val book = dao.getById(bookId)
+            if (book?.status == BookStatus.PROCESSING.name) {
+                dao.updateAudio(bookId, null, BookStatus.FAILED.name, 0L)
+            }
         }
     }
 
@@ -195,41 +199,44 @@ class AudioBookRepositoryImpl @Inject constructor(
     // Delete
     // =========================================================================
 
-    override suspend fun deleteBook(id: Long) = withContext(Dispatchers.IO) {
-        val entity = dao.getById(id) ?: return@withContext
+    override suspend fun deleteBook(id: Long) {
+        withContext(Dispatchers.IO) {
+            val entity = dao.getById(id) ?: return@withContext
 
-        // Cancel workers dang chay
-        runCatching { orchestrator.cancel(id) }
+            // Cancel workers dang chay
+            runCatching { orchestrator.cancel(id) }
 
-        // Xoa file output
-        entity.audioPath?.let { path ->
-            runCatching { File(path).takeIf(File::exists)?.delete() }
-        }
+            // Xoa file output
+            entity.audioPath?.let { path ->
+                runCatching { File(path).takeIf(File::exists)?.delete() }
+            }
 
-        // Xoa chunk dir + files
-        runCatching {
-            File(context.filesDir, "audio/book_$id").deleteRecursively()
-        }
-        runCatching {
-            File(context.filesDir, "audio/book_$id.m4a").delete()
-        }
-        runCatching {
-            File(context.filesDir, "audio/book_$id.chunks.txt").delete()
-        }
+            // Xoa chunk dir + files
+            runCatching {
+                File(context.filesDir, "audio/book_$id").deleteRecursively()
+            }
+            runCatching {
+                File(context.filesDir, "audio/book_$id.m4a").delete()
+            }
+            runCatching {
+                File(context.filesDir, "audio/book_$id.chunks.txt").delete()
+            }
 
-        // Xoa khoi DB
-        chapterDao.deleteByBook(id)
-        dao.delete(entity)
+            // Xoa khoi DB
+            chapterDao.deleteByBook(id)
+            dao.delete(entity)
+        }
     }
 
     // =========================================================================
     // Playback state
     // =========================================================================
 
-    override suspend fun updatePlayback(bookId: Long, positionMs: Long) =
+    override suspend fun updatePlayback(bookId: Long, positionMs: Long) {
         withContext(Dispatchers.IO) {
             dao.updatePlayback(bookId, positionMs, System.currentTimeMillis())
         }
+    }
 
     // =========================================================================
     // Chapters
