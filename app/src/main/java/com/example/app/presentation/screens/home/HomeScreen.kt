@@ -453,6 +453,127 @@ private fun NeonBookCard(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                     )
+                   @Composable
+private fun NeonBookCard(
+    book: AudioBook,
+    progress: SynthesisProgress?,
+    onPlay: () -> Unit,
+    onSynthesize: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val statusColor = when (book.status) {
+        BookStatus.READY -> NeonGreen
+        BookStatus.PROCESSING -> NeonCyan
+        BookStatus.FAILED -> StatusFailed
+        BookStatus.IMPORTED -> NeonMagenta
+    }
+    val isProcessing = book.status == BookStatus.PROCESSING
+    val isReady = book.status == BookStatus.READY && book.audioPath != null
+    val isFailed = book.status == BookStatus.FAILED
+    val canPreview = progress?.canPreview == true
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    listOf(
+                        statusColor.copy(alpha = 0.6f),
+                        Color.Transparent,
+                    ),
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    book.status.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (canPreview) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(NeonCyan.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            "Preview",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NeonCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                book.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (progress != null) {
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { progress.percent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = NeonCyan,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Processing ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeonCyan,
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (isReady || (isProcessing && canPreview)) {
+                Button(
+                    onClick = onPlay,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isReady) NeonGreen else NeonCyan,
+                        contentColor = Color.Black,
+                    ),
+                ) {
+                    Icon(
+                        if (isReady) Icons.Default.PlayArrow
+                        else Icons.Default.Headphones,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (isReady) "Listen now" else "Listen preview",
@@ -480,8 +601,13 @@ private fun NeonBookCard(
                 }
 
                 when {
-                    isProcessing -> IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.Cancel, "Cancel", tint = StatusFailed)
+                    isProcessing -> {
+                        IconButton(onClick = onCancel) {
+                            Icon(Icons.Default.Cancel, "Cancel", tint = StatusFailed)
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Default.Delete, "Delete", tint = TextSecondary)
+                        }
                     }
                     isFailed -> {
                         IconButton(onClick = onSynthesize) {
