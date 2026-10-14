@@ -14,6 +14,8 @@ interface AudioBookRepository {
     suspend fun synthesize(bookId: Long, profile: VoiceProfile)
     fun observeSynthesisState(bookId: Long): Flow<SynthesisState>
     suspend fun cancelSynthesis(bookId: Long)
+    suspend fun isSynthesisRunning(bookId: Long): Boolean
+    suspend fun markAsFailed(bookId: Long)
     suspend fun deleteBook(id: Long)
     suspend fun updatePlayback(bookId: Long, positionMs: Long)
     suspend fun getChapters(bookId: Long): List<Chapter>
