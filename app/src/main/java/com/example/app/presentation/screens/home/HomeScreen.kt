@@ -5,55 +5,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,16 +27,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.app.domain.model.AudioBook
 import com.example.app.domain.model.BookStatus
-import com.example.app.presentation.theme.NeonCyan
-import com.example.app.presentation.theme.NeonGreen
-import com.example.app.presentation.theme.NeonMagenta
-import com.example.app.presentation.theme.NeonPurple
-import com.example.app.presentation.theme.NeonYellow
-import com.example.app.presentation.theme.StatusFailed
-import com.example.app.presentation.theme.TextMuted
-import com.example.app.presentation.theme.TextSecondary
+import com.example.app.presentation.theme.*
 
-private val SUPPORTED_MIME_TYPES = arrayOf(
+private val MIME_TYPES = arrayOf(
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 )
@@ -93,10 +46,10 @@ fun HomeScreen(
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val synthesis by viewModel.synthesis.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbar = remember { SnackbarHostState() }
 
-    val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         runCatching {
@@ -104,17 +57,15 @@ fun HomeScreen(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         }
-        val name = uri.lastPathSegment?.substringAfterLast('/')
-        viewModel.onFilePicked(uri, name)
+        viewModel.onFilePicked(uri, uri.lastPathSegment?.substringAfterLast('/'))
     }
 
     LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is HomeEvent.Message -> snackbarHostState.showSnackbar(event.text)
-                is HomeEvent.Imported ->
-                    snackbarHostState.showSnackbar("Da them sach")
-                is HomeEvent.NavigateToPlayer -> onOpenPlayer(event.bookId)
+        viewModel.events.collect { e ->
+            when (e) {
+                is HomeEvent.Message -> snackbar.showSnackbar(e.text)
+                is HomeEvent.Imported -> snackbar.showSnackbar("Da them sach")
+                is HomeEvent.NavigateToPlayer -> onOpenPlayer(e.bookId)
             }
         }
     }
@@ -124,53 +75,35 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.AutoStories,
-                            contentDescription = null,
-                            tint = NeonCyan,
-                            modifier = Modifier.size(28.dp),
-                        )
+                        Icon(Icons.Default.AutoStories, null,
+                            tint = NeonCyan, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(
-                                "AudioBook",
+                            Text("AudioBook",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                            Text(
-                                "Thu vien cua ban",
+                                fontWeight = FontWeight.Bold)
+                            Text("Thu vien cua ban",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted,
-                            )
+                                color = TextMuted)
                         }
                     }
                 },
                 actions = {
                     if (stats.failed > 0) {
                         IconButton(onClick = viewModel::onDeleteAllFailed) {
-                            Icon(
-                                Icons.Default.DeleteSweep,
-                                contentDescription = "Delete failed",
-                                tint = StatusFailed,
-                            )
+                            Icon(Icons.Default.DeleteSweep, "Xoa loi",
+                                tint = StatusFailed)
                         }
                     }
-
                     IconButton(
-                        onClick = { filePicker.launch(SUPPORTED_MIME_TYPES) },
+                        onClick = { picker.launch(MIME_TYPES) },
                         modifier = Modifier
                             .padding(end = 4.dp)
                             .clip(CircleShape)
                             .background(NeonCyan),
                     ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Add book",
-                            tint = Color.Black,
-                        )
+                        Icon(Icons.Default.Add, "Them sach", tint = Color.Black)
                     }
-
                     IconButton(
                         onClick = onOpenSettings,
                         modifier = Modifier
@@ -178,11 +111,7 @@ fun HomeScreen(
                             .clip(CircleShape)
                             .background(NeonMagenta),
                     ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.Black,
-                        )
+                        Icon(Icons.Default.Settings, "Cai dat", tint = Color.Black)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -190,91 +119,58 @@ fun HomeScreen(
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
             StatsRow(stats)
 
-            Box(modifier = Modifier.weight(1f)) {
-                when (val state = uiState) {
+            Box(Modifier.weight(1f)) {
+                when (val s = uiState) {
                     HomeUiState.Loading -> Box(
-                        modifier = Modifier.fillMaxSize(),
+                        Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(color = NeonCyan)
-                    }
+                    ) { CircularProgressIndicator(color = NeonCyan) }
 
                     is HomeUiState.Error -> Box(
-                        modifier = Modifier.fillMaxSize(),
+                        Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            state.message,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = StatusFailed,
-                        )
-                    }
+                    ) { Text(s.message, color = StatusFailed) }
 
                     is HomeUiState.Success -> {
-                        if (state.books.isEmpty()) {
-                            EmptyState()
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    top = 8.dp,
-                                    bottom = 16.dp,
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.books, key = { it.id }) { book ->
-                                    NeonBookCard(
-                                        book = book,
-                                        progress = synthesis[book.id],
-                                        onPlay = { onOpenPlayer(book.id) },
-                                        onSynthesize = {
-                                            viewModel.onResynthesize(book.id)
-                                        },
-                                        onCancel = { viewModel.onCancelSynthesis(book.id) },
-                                        onDelete = { viewModel.onDelete(book.id) },
-                                    )
-                                }
+                        if (s.books.isEmpty()) EmptyState()
+                        else LazyColumn(
+                            Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(s.books, key = { it.id }) { book ->
+                                BookCard(
+                                    book = book,
+                                    progress = synthesis[book.id],
+                                    onPlay = { onOpenPlayer(book.id) },
+                                    onSynth = { viewModel.onResynthesize(book.id) },
+                                    onCancel = { viewModel.onCancelSynthesis(book.id) },
+                                    onDelete = { viewModel.onDelete(book.id) },
+                                )
                             }
                         }
                     }
                 }
             }
 
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            Surface(color = MaterialTheme.colorScheme.surface) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    Modifier.fillMaxWidth().padding(12.dp),
                     horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Default.LibraryMusic,
-                        contentDescription = null,
-                        tint = NeonMagenta,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Icon(Icons.Default.LibraryMusic, null,
+                        tint = NeonMagenta, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Da san sang: ${stats.ready} sach",
+                    Text("Da san sang: ${stats.ready} sach",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                    )
+                        color = TextSecondary)
                 }
             }
         }
@@ -284,60 +180,45 @@ fun HomeScreen(
 @Composable
 private fun StatsRow(stats: HomeStats) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         StatChip("Tong", stats.total, NeonPurple, Modifier.weight(1f))
         StatChip("San sang", stats.ready, NeonGreen, Modifier.weight(1f))
-        StatChip("Dang xu ly", stats.processing, NeonCyan, Modifier.weight(1f))
+        StatChip("Xu ly", stats.processing, NeonCyan, Modifier.weight(1f))
         StatChip("Loi", stats.failed, StatusFailed, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun StatChip(
-    label: String,
-    value: Int,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
+private fun StatChip(label: String, value: Int, color: Color, modifier: Modifier) {
     Box(
-        modifier = modifier
+        modifier
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(
-                width = 1.dp,
-                color = color.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .padding(vertical = 10.dp, horizontal = 8.dp),
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .padding(vertical = 10.dp),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                value.toString(),
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(value.toString(),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = color,
-            )
-            Text(
-                label,
+                fontWeight = FontWeight.Bold, color = color)
+            Text(label,
                 style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+                color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-private fun NeonBookCard(
+private fun BookCard(
     book: AudioBook,
     progress: SynthesisProgress?,
     onPlay: () -> Unit,
-    onSynthesize: () -> Unit,
+    onSynth: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -347,87 +228,62 @@ private fun NeonBookCard(
         BookStatus.FAILED -> StatusFailed
         BookStatus.IMPORTED -> NeonMagenta
     }
-    val isProcessing = book.status == BookStatus.PROCESSING
-    val isReady = book.status == BookStatus.READY && book.audioPath != null
-    val isFailed = book.status == BookStatus.FAILED
+    val processing = book.status == BookStatus.PROCESSING
+    val ready = book.status == BookStatus.READY && book.audioPath != null
+    val failed = book.status == BookStatus.FAILED
     val canPreview = progress?.canPreview == true
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        statusColor.copy(alpha = 0.6f),
-                        Color.Transparent,
-                    ),
-                ),
-                shape = RoundedCornerShape(16.dp),
-            ),
+        Modifier.fillMaxWidth().border(
+            1.dp,
+            Brush.linearGradient(listOf(statusColor.copy(alpha = 0.6f), Color.Transparent)),
+            RoundedCornerShape(16.dp),
+        ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(statusColor),
-                )
+                Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    book.status.name,
+                Text(book.status.name,
                     style = MaterialTheme.typography.labelSmall,
-                    color = statusColor,
-                    fontWeight = FontWeight.Bold,
-                )
+                    color = statusColor, fontWeight = FontWeight.Bold)
                 if (canPreview) {
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        modifier = Modifier
+                        Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(NeonCyan.copy(alpha = 0.15f))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text(
-                            "Preview",
+                        Text("Preview",
                             style = MaterialTheme.typography.labelSmall,
-                            color = NeonCyan,
-                            fontWeight = FontWeight.Bold,
-                        )
+                            color = NeonCyan, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
             Spacer(Modifier.height(8.dp))
 
-            Text(
-                book.title,
+            Text(book.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
 
             if (progress != null) {
                 Spacer(Modifier.height(12.dp))
                 LinearProgressIndicator(
                     progress = { progress.percent / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
+                    modifier = Modifier.fillMaxWidth().height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = NeonCyan,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    "Processing ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
+                    "Dang xu ly ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
                     style = MaterialTheme.typography.labelSmall,
                     color = NeonCyan,
                 )
@@ -435,190 +291,57 @@ private fun NeonBookCard(
 
             Spacer(Modifier.height(12.dp))
 
-            if (isReady || (isProcessing && canPreview)) {
+            if (ready || (processing && canPreview)) {
                 Button(
                     onClick = onPlay,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isReady) NeonGreen else NeonCyan,
+                        containerColor = if (ready) NeonGreen else NeonCyan,
                         contentColor = Color.Black,
                     ),
                 ) {
                     Icon(
-                        if (isReady) Icons.Default.PlayArrow
-                        else Icons.Default.Headphones,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                   @Composable
-private fun NeonBookCard(
-    book: AudioBook,
-    progress: SynthesisProgress?,
-    onPlay: () -> Unit,
-    onSynthesize: () -> Unit,
-    onCancel: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val statusColor = when (book.status) {
-        BookStatus.READY -> NeonGreen
-        BookStatus.PROCESSING -> NeonCyan
-        BookStatus.FAILED -> StatusFailed
-        BookStatus.IMPORTED -> NeonMagenta
-    }
-    val isProcessing = book.status == BookStatus.PROCESSING
-    val isReady = book.status == BookStatus.READY && book.audioPath != null
-    val isFailed = book.status == BookStatus.FAILED
-    val canPreview = progress?.canPreview == true
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        statusColor.copy(alpha = 0.6f),
-                        Color.Transparent,
-                    ),
-                ),
-                shape = RoundedCornerShape(16.dp),
-            ),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(statusColor),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    book.status.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statusColor,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (canPreview) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(NeonCyan.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            "Preview",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NeonCyan,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                book.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            if (progress != null) {
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = { progress.percent / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = NeonCyan,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Processing ${progress.percent}% (${progress.doneChunks}/${progress.totalChunks})",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = NeonCyan,
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            if (isReady || (isProcessing && canPreview)) {
-                Button(
-                    onClick = onPlay,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isReady) NeonGreen else NeonCyan,
-                        contentColor = Color.Black,
-                    ),
-                ) {
-                    Icon(
-                        if (isReady) Icons.Default.PlayArrow
-                        else Icons.Default.Headphones,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        if (ready) Icons.Default.PlayArrow else Icons.Default.Headphones,
+                        null, modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (isReady) "Listen now" else "Listen preview",
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Text(if (ready) "Nghe ngay" else "Nghe truoc",
+                        fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(8.dp))
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
-                    onClick = onSynthesize,
-                    enabled = !isProcessing && !isReady && !isFailed,
-                ) {
-                    Icon(
-                        Icons.Default.GraphicEq,
-                        contentDescription = "Generate audio",
-                        tint = if (!isProcessing && !isReady && !isFailed)
-                            NeonPurple else TextMuted,
-                    )
+                IconButton(onClick = onSynth,
+                    enabled = !processing && !ready && !failed) {
+                    Icon(Icons.Default.GraphicEq, "Tao audio",
+                        tint = if (!processing && !ready && !failed) NeonPurple
+                        else TextMuted)
                 }
-
                 when {
-                    isProcessing -> {
+                    processing -> {
                         IconButton(onClick = onCancel) {
-                            Icon(Icons.Default.Cancel, "Cancel", tint = StatusFailed)
+                            Icon(Icons.Default.Cancel, "Huy", tint = StatusFailed)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, "Delete", tint = TextSecondary)
+                            Icon(Icons.Default.Delete, "Xoa", tint = TextSecondary)
                         }
                     }
-                    isFailed -> {
-                        IconButton(onClick = onSynthesize) {
-                            Icon(Icons.Default.Refresh, "Retry", tint = NeonYellow)
+                    failed -> {
+                        IconButton(onClick = onSynth) {
+                            Icon(Icons.Default.Refresh, "Thu lai", tint = NeonYellow)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, "Delete", tint = StatusFailed)
+                            Icon(Icons.Default.Delete, "Xoa", tint = StatusFailed)
                         }
                     }
                     else -> IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, "Delete", tint = TextSecondary)
+                        Icon(Icons.Default.Delete, "Xoa", tint = TextSecondary)
                     }
                 }
             }
@@ -629,27 +352,20 @@ private fun NeonBookCard(
 @Composable
 private fun EmptyState() {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            Icons.Default.AutoStories,
-            contentDescription = null,
+        Icon(Icons.Default.AutoStories, null,
             modifier = Modifier.size(80.dp),
-            tint = NeonCyan.copy(alpha = 0.4f),
-        )
+            tint = NeonCyan.copy(alpha = 0.4f))
         Spacer(Modifier.height(16.dp))
-        Text(
-            "No books yet",
+        Text("Chua co sach nao",
             style = MaterialTheme.typography.titleMedium,
-            color = TextSecondary,
-        )
+            color = TextSecondary)
         Spacer(Modifier.height(4.dp))
-        Text(
-            "Tap + at top right to add",
+        Text("Nhan + o goc tren de them sach",
             style = MaterialTheme.typography.bodySmall,
-            color = TextMuted,
-        )
+            color = TextMuted)
     }
 }
