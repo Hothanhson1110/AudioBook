@@ -17,4 +17,10 @@ class SynthesizeBookUseCase @Inject constructor(
 
     suspend fun cancel(bookId: Long) =
         repository.cancelSynthesis(bookId)
+
+    suspend fun isRunning(bookId: Long): Boolean =
+        repository.isSynthesisRunning(bookId)
+
+    suspend fun markFailed(bookId: Long) =
+        repository.markAsFailed(bookId)
 }
