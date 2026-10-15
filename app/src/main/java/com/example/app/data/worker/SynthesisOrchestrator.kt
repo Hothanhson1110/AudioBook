@@ -59,7 +59,7 @@ class SynthesisOrchestrator @Inject constructor(
                 parser.parse(sourceUri).collect { paragraph ->
                     charCount += paragraph.length
                     chunker.chunk(paragraph).forEach { chunk ->
-                        val safe = chunk.replace('\\n', ' ').replace('\\r', ' ')
+                        val safe = chunk.replace('\n', ' ').replace('\r', ' ')
                         if (safe.isNotBlank()) {
                             writer.write(safe)
                             writer.newLine()
