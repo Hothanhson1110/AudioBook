@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,12 +30,17 @@ class PdfDocumentParser @Inject constructor(
         input.use { stream ->
             PDDocument.load(stream).use { doc ->
                 val stripper = PDFTextStripper().apply { sortByPosition = true }
-                val raw = stripper.getText(doc)
-                raw.split(Regex("\\n\\s*\\n"))
-                    .asSequence()
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .forEach { emit(it) }
+                for (page in 1..doc.numberOfPages) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    stripper.startPage = page
+                    stripper.endPage = page
+                    stripper.getText(doc)
+                        .split(Regex("\\n\\s*\\n"))
+                        .asSequence()
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .forEach { emit(it) }
+                }
             }
         }
     }.flowOn(Dispatchers.IO)

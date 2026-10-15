@@ -49,38 +49,42 @@ class SynthesisOrchestrator @Inject constructor(
             val ext = sourceUri.substringAfterLast('.', "").lowercase()
             val parser = parserFactory.parserFor(ext) ?: error("Unsupported: .$ext")
 
-            val fullText = buildString {
-                parser.parse(sourceUri).collect { appendLine(it) }
-            }
-            WorkerLogger.log(context, "Orchestrator", "parsed: ${fullText.length} chars")
-
-            val chunks = chunker.chunk(fullText)
-            WorkerLogger.log(context, "Orchestrator", "chunks: ${chunks.size}")
-            require(chunks.isNotEmpty()) { "No text to synthesize" }
-
-            // Lưu toàn bộ chunks vào file — worker đọc lại
+            // Stream paragraphs to disk instead of keeping the full document in memory.
             val chunksFile = File(context.filesDir, "audio/book_$bookId.chunks.txt")
             chunksFile.parentFile?.mkdirs()
-            chunksFile.bufferedWriter().use { w ->
-                chunks.forEach { chunk ->
-                    // Escape newline trong chunk để tách an toàn
-                    val safe = chunk.replace('\n', ' ').replace('\r', ' ')
-                    w.write(safe)
-                    w.newLine()
+            var chunkCount = 0
+            var charCount = 0L
+
+            chunksFile.bufferedWriter().use { writer ->
+                parser.parse(sourceUri).collect { paragraph ->
+                    charCount += paragraph.length
+                    chunker.chunk(paragraph).forEach { chunk ->
+                        val safe = chunk.replace('\\n', ' ').replace('\\r', ' ')
+                        if (safe.isNotBlank()) {
+                            writer.write(safe)
+                            writer.newLine()
+                            chunkCount++
+                        }
+                    }
                 }
             }
+
+            WorkerLogger.log(context, "Orchestrator", "parsed: $charCount chars")
+            WorkerLogger.log(context, "Orchestrator", "chunks: $chunkCount")
+            require(chunkCount > 0) { "No text to synthesize" }
+
             WorkerLogger.log(
                 context, "Orchestrator",
                 "saved chunks to ${chunksFile.absolutePath} (${chunksFile.length()} bytes)"
             )
 
             // Chia thành 4 batch (chỉ truyền index range, không truyền text)
-            val batchCount = minOf(PARALLEL_LANES, chunks.size)
-            val batchSize = (chunks.size + batchCount - 1) / batchCount
+            val batchCount = minOf(PARALLEL_LANES, chunkCount)
+            val batchSize = (chunkCount + batchCount - 1) / batchCount
 
             val batchRequests = (0 until batchCount).map { batchIdx ->
                 val start = batchIdx * batchSize
-                val end = minOf(start + batchSize, chunks.size)
+                val end = minOf(start + batchSize, chunkCount)
 
                 OneTimeWorkRequestBuilder<TtsBatchWorker>()
                     .setInputData(

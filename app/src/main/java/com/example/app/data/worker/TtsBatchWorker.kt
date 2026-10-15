@@ -55,22 +55,31 @@ class TtsBatchWorker @AssistedInject constructor(
             )
         }
 
-        val allChunks = try {
-            chunksFile.readLines()
+        // Read only this batch range, not the entire chunks file.
+        val myChunks = try {
+            chunksFile.bufferedReader().use { reader ->
+                val selected = ArrayList<String>(endIndex - startIndex)
+                var index = 0
+                while (index < endIndex) {
+                    val line = reader.readLine() ?: break
+                    if (index >= startIndex) selected.add(line)
+                    index++
+                }
+                selected
+            }
         } catch (t: Throwable) {
             WorkerLogger.logError(applicationContext, "TtsBatch#$batchIndex", t)
             return@withContext Result.failure()
         }
 
-        if (startIndex >= allChunks.size) {
+        if (myChunks.isEmpty()) {
             WorkerLogger.log(
                 applicationContext, "TtsBatch#$batchIndex",
-                "skip: startIndex ${startIndex} >= total ${allChunks.size}"
+                "skip: no chunks in range $startIndex..${endIndex - 1}"
             )
             return@withContext Result.success()
         }
 
-        val myChunks = allChunks.subList(startIndex, minOf(endIndex, allChunks.size))
         val outDir = File(applicationContext.filesDir, "audio/book_$bookId").apply { mkdirs() }
 
         try {
